@@ -142,4 +142,60 @@ return {
 		Packet.Boolean8,
 		Packet.Any
 	),
+
+
+    SkillActivate = Packet(
+        "SkillActivate",
+        Packet.String,
+        Packet.NumberF64
+    ),
+
+    SkillCancel = Packet(
+        "SkillCancel",
+        Packet.String
+    ),
+
+    SkillRejected = Packet(
+        "SkillRejected",
+        Packet.String,
+        Packet.String
+    ),
+
+    SkillSync = Packet(
+        "SkillSync",
+        Packet.String,
+        Packet.String,
+        Packet.Boolean8
+    ),
+
+    HitCandidates = Packet(
+        "HitCandidates",
+        Packet.String,
+        Packet.String,
+        Packet.NumberF32,
+        Packet.NumberF64
+    ),
+
+    HitConfirmed = Packet(
+        "HitConfirmed",
+        Packet.Instance,
+        Packet.Instance,
+        Packet.NumberF32,
+        Packet.Vector3F32,
+        Packet.String
+    ),
+
+    CooldownStarted = Packet(
+        "CooldownStarted",
+        Packet.String,
+        Packet.NumberF32
+    ),
+
+    ConnectSignal = Packet(
+        "ConnectSignal",
+        Packet.String,
+        Packet.Vector3F32,
+        Packet.NumberF32,
+        Packet.NumberF32
+    ),
 }
