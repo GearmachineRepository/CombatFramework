@@ -1,60 +1,75 @@
 --!strict
 
-local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local CombatTypes = require(Shared.Types.CombatTypes)
+
+type Block = CombatTypes.Block
+type ExecutionContext = CombatTypes.ExecutionContext
+type HandlerResult = CombatTypes.HandlerResult
 
 local VelocityHandler = {}
 
-function VelocityHandler.Execute(Block: any, Context: any): any?
-    local VelX = Block.X or 0
-    local VelY = Block.Y or 0
-    local VelZ = Block.Z or 0
-    local Time = Block.Time or 0.1
-    local Fade = Block.Fade or false
-    local Track = Block.Track ~= false
-    local LastHit = Block.LastHit or -1
-    local _Ragdoll = Block.Ragdoll or 0
+function VelocityHandler.Execute(Block: Block, Context: ExecutionContext): HandlerResult?
+	local VelocityX = Block.X or 0
+	local VelocityY = Block.Y or 0
+	local VelocityZ = Block.Z or 0
+	local Duration = Block.Time or 0.1
+	local Fade = Block.Fade or false
+	local Track = Block.Track or false
+	local LastHit = Block.LastHit or -1
 
-    local Target
-    if LastHit >= 0 then
-        Target = Context.GetLastHitTarget()
-        if not Target then
-            return nil
-        end
-    else
-        Target = Context.Entity.Character
-    end
+	local Target: Model
+	if LastHit >= 0 then
+		local LastHitTarget = Context.GetLastHitTarget()
+		if not LastHitTarget then
+			return nil
+		end
+		Target = LastHitTarget
+	else
+		Target = Context.Entity.Character
+	end
 
-    local RootPart = Target:FindFirstChild("HumanoidRootPart") :: BasePart?
-    if not RootPart then
-        return nil
-    end
+	local RootPart = Target:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not RootPart then
+		return nil
+	end
 
-    local Velocity = Vector3.new(VelX, VelY, VelZ)
+	local Direction: Vector3
+	if Track then
+		local LookVector = RootPart.CFrame.LookVector
+		local RightVector = RootPart.CFrame.RightVector
+		local UpVector = Vector3.new(0, 1, 0)
+		Direction = (RightVector * VelocityX) + (UpVector * VelocityY) + (LookVector * VelocityZ)
+	else
+		Direction = Vector3.new(VelocityX, VelocityY, VelocityZ)
+	end
 
-    if Track then
-        Velocity = RootPart.CFrame:VectorToWorldSpace(Velocity)
-    end
+	local BodyVelocity = Instance.new("BodyVelocity")
+	BodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+	BodyVelocity.Velocity = Direction
+	BodyVelocity.Parent = RootPart
 
-    local BodyVelocity = Instance.new("BodyVelocity")
-    BodyVelocity.MaxForce = Vector3.new(1, 1, 1) * math.huge
-    BodyVelocity.Velocity = Velocity
-    BodyVelocity.Parent = RootPart
+	if Fade then
+		local Steps = 10
+		local StepDuration = Duration / Steps
+		local VelocityStep = Direction / Steps
 
-    if Fade then
-        local Tween = TweenService:Create(BodyVelocity, TweenInfo.new(Time), {
-            Velocity = Vector3.zero,
-        })
-        Tween:Play()
-        Tween.Completed:Wait()
-        BodyVelocity:Destroy()
-    else
-        task.delay(Time, function()
-            BodyVelocity:Destroy()
-        end)
-        task.wait(Time)
-    end
+		for Step = 1, Steps do
+			task.wait(StepDuration)
+			if Context.Canceled then
+				break
+			end
+			BodyVelocity.Velocity = Direction - (VelocityStep * Step)
+		end
+	else
+		task.wait(Duration)
+	end
 
-    return nil
+	BodyVelocity:Destroy()
+
+	return nil
 end
 
 return VelocityHandler

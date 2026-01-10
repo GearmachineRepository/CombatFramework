@@ -1,66 +1,111 @@
 --!strict
 
-local ExecutionContext = {}
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local DEFAULT_PROPERTIES = {
-    DamageMultiplier = 1,
-    KnockbackMultiplier = 1,
-    Invincible = false,
-}
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Packages = require(Shared.Packages)
+local CombatTypes = require(Shared.Types.CombatTypes)
 
-function ExecutionContext.Create(Entity: any, SkillDefinition: any, EventBus: any): any
-    local StartTime = tick()
+local TableUtil = Packages.TableUtil
 
-    local Properties = table.clone(DEFAULT_PROPERTIES)
-    if SkillDefinition.Properties then
-        for Key, Value in SkillDefinition.Properties do
-            Properties[Key] = Value
-        end
-    end
+type ExecutionEntity = CombatTypes.ExecutionEntity
+type SkillDefinition = CombatTypes.SkillDefinition
+type SkillProperties = CombatTypes.SkillProperties
+type HitRecord = CombatTypes.HitRecord
+type ExecutionContext = CombatTypes.ExecutionContext
+type EventBus = CombatTypes.EventBus
 
-    local Context = {
-        Entity = Entity,
-        SkillDefinition = SkillDefinition,
-        EventBus = EventBus,
-        StartTime = StartTime,
-        Canceled = false,
-        Properties = Properties,
-        HitRecords = {},
-        LastHitTarget = nil,
-    }
+local ExecutionContextModule = {}
 
-    function Context.GetElapsedTime(): number
-        return tick() - StartTime
-    end
+local DEFAULT_PROPERTIES: SkillProperties = table.freeze({
+	DamageMultiplier = 1,
+	KnockbackMultiplier = 1,
+	Invincible = false,
+})
 
-    function Context.Cancel()
-        Context.Canceled = true
-    end
+function ExecutionContextModule.Create(
+	Entity: ExecutionEntity,
+	SkillDefinition: SkillDefinition,
+	EventBus: any
+): ExecutionContext
+	local StartTime = tick()
 
-    function Context.RecordHit(Target: Model, Damage: number)
-        table.insert(Context.HitRecords, {
-            Target = Target,
-            Timestamp = tick(),
-            Damage = Damage,
-        })
-        Context.LastHitTarget = Target :: any
-    end
+	local Properties: any = TableUtil.Copy(DEFAULT_PROPERTIES)
+	if SkillDefinition.Properties then
+		Properties = TableUtil.Assign(Properties, SkillDefinition.Properties)
+	end
 
-    function Context.HadHitInWindow(WindowSeconds: number): boolean
-        local CutoffTime = tick() - WindowSeconds
-        for _, Record in Context.HitRecords do
-            if Record.Timestamp >= CutoffTime then
-                return true
-            end
-        end
-        return false
-    end
+	local HitRecords: { HitRecord } = {}
+	local LastHitTarget: Model? = nil
+	local Canceled = false
 
-    function Context.GetLastHitTarget(): Model?
-        return Context.LastHitTarget
-    end
+	local function GetElapsedTime(): number
+		return tick() - StartTime
+	end
 
-    return Context
+	local function Cancel()
+		Canceled = true
+	end
+
+	local function RecordHit(Target: Model, Damage: number)
+		local Record: HitRecord = {
+			Target = Target,
+			Timestamp = tick(),
+			Damage = Damage,
+		}
+		table.insert(HitRecords, Record)
+		LastHitTarget = Target
+	end
+
+	local function HadHitInWindow(WindowSeconds: number): boolean
+		local CutoffTime = tick() - WindowSeconds
+		for _, Record in HitRecords do
+			if Record.Timestamp >= CutoffTime then
+				return true
+			end
+		end
+		return false
+	end
+
+	local function GetLastHitTarget(): Model?
+		return LastHitTarget
+	end
+
+	local Context: ExecutionContext = {
+		Entity = Entity,
+		SkillDefinition = SkillDefinition,
+		EventBus = EventBus,
+		StartTime = StartTime,
+		Canceled = Canceled,
+		Properties = Properties,
+		HitRecords = HitRecords,
+		LastHitTarget = LastHitTarget,
+
+		GetElapsedTime = GetElapsedTime,
+		Cancel = Cancel,
+		RecordHit = RecordHit,
+		HadHitInWindow = HadHitInWindow,
+		GetLastHitTarget = GetLastHitTarget,
+	}
+
+	return setmetatable({}, {
+		__index = function(_, Key)
+			if Key == "Canceled" then
+				return Canceled
+			elseif Key == "HitRecords" then
+				return HitRecords
+			elseif Key == "LastHitTarget" then
+				return LastHitTarget
+			else
+				return (Context :: any)[Key]
+			end
+		end,
+		__newindex = function(_, Key, Value)
+			if Key == "Canceled" then
+				Canceled = Value
+			end
+		end,
+	}) :: any
 end
 
-return ExecutionContext
+return ExecutionContextModule

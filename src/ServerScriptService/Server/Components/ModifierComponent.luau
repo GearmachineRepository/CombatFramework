@@ -1,5 +1,19 @@
 --!strict
 
+local ServerScriptService = game:GetService("ServerScriptService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Server = ServerScriptService:WaitForChild("Server")
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+
+local Types = require(Server.Ensemble.Types)
+local Packages = require(Shared.Packages)
+
+local Trove = Packages.Trove
+
+type Entity = Types.Entity
+type EntityContext = Types.EntityContext
+
 local ModifierComponent = {}
 
 ModifierComponent.ComponentName = "Modifiers"
@@ -21,12 +35,13 @@ type ModifierInstance = {
 	Destroy: () -> (),
 }
 
-function ModifierComponent.From(Entity: any): Type?
-	return Entity:GetComponent("Modifiers")
+function ModifierComponent.From(EntityInstance: Entity): ModifierInstance?
+	return EntityInstance:GetComponent("Modifiers")
 end
 
-function ModifierComponent.Create(_Entity: any, _Context: any): ModifierInstance
+function ModifierComponent.Create(_Entity: Entity, _Context: EntityContext): ModifierInstance
 	local ModifiersByType: { [string]: { Modifier } } = {}
+	local ComponentTrove = Trove.new()
 
 	local function Register(Type: string, Priority: number, Func: ModifierFunction): () -> ()
 		local Modifiers = ModifiersByType[Type]
@@ -42,7 +57,7 @@ function ModifierComponent.Create(_Entity: any, _Context: any): ModifierInstance
 
 		table.insert(Modifiers, NewModifier)
 
-		table.sort(Modifiers :: {Modifier}, function(FirstModifier: Modifier, SecondModifier: Modifier): boolean
+		table.sort(Modifiers, function(FirstModifier: Modifier, SecondModifier: Modifier): boolean
 			return FirstModifier.Priority < SecondModifier.Priority
 		end)
 
@@ -104,6 +119,7 @@ function ModifierComponent.Create(_Entity: any, _Context: any): ModifierInstance
 	end
 
 	local function Destroy()
+		ComponentTrove:Destroy()
 		table.clear(ModifiersByType)
 	end
 

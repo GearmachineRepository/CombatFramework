@@ -4,35 +4,28 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Enums = require(Shared.Enums)
+local CombatTypes = require(Shared.Types.CombatTypes)
+
+type Block = CombatTypes.Block
+type ExecutionContext = CombatTypes.ExecutionContext
+type HandlerResult = CombatTypes.HandlerResult
 
 local ConnectHandler = {}
 
-function ConnectHandler.Execute(Block: any, Context: any): any?
-    local Signal = Block.Signal
-    local Time = Block.Time or 0
-    local Range = Block.Range or math.huge
+function ConnectHandler.Execute(Block: Block, Context: ExecutionContext): HandlerResult?
+	local SignalId = Block.Signal or "Default"
+	local Duration = Block.Time or 1
+	local Range = Block.Range or 50
 
-    if not Signal then
-        warn("[ConnectHandler] Missing Signal")
-        return nil
-    end
+	Context.EventBus:Publish(Enums.Combat.Connect.SignalSent, {
+		Entity = Context.Entity,
+		SignalId = SignalId,
+		Duration = Duration,
+		Range = Range,
+		Position = Context.Entity.Character:GetPivot().Position,
+	})
 
-    local Character = Context.Entity.Character
-    local Position = Character:GetPivot().Position
-
-    Context.EventBus:Publish(Enums.Combat.Connect.SignalSent, {
-        Signal = Signal,
-        Position = Position,
-        Range = Range,
-        Duration = Time,
-        Entity = Context.Entity,
-    })
-
-    if Time > 0 then
-        task.wait(Time)
-    end
-
-    return nil
+	return nil
 end
 
 return ConnectHandler

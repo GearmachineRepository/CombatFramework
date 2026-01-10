@@ -1,8 +1,16 @@
 --!strict
 
 local ServerScriptService = game:GetService("ServerScriptService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Types = require(ServerScriptService.Server.Ensemble.Types)
+local Server = ServerScriptService:WaitForChild("Server")
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+
+local Types = require(Server.Ensemble.Types)
+local Packages = require(Shared.Packages)
+
+local Trove = Packages.Trove
+local Signal = Packages.Signal
 
 type StateConfig = Types.StateConfig
 type EntityContext = Types.EntityContext
@@ -29,20 +37,24 @@ type TimedStateData = {
 	Cancelled: boolean,
 }
 
-function StateComponent.From(Entity: Entity): Type?
-	return Entity:GetComponent("States")
+function StateComponent.From(EntityInstance: Entity): StateInstance?
+	return EntityInstance:GetComponent("States")
 end
 
-function StateComponent.Create(Entity: Entity, Context: EntityContext): StateInstance
+function StateComponent.Create(EntityInstance: Entity, Context: EntityContext): StateInstance
 	local Config: StateConfig = Context.StateConfig or {}
 	local CurrentStates: { [string]: boolean } = {}
 	local StateCallbacks: { [string]: { (Value: boolean) -> () } } = {}
 	local StateTimers: { [string]: TimedStateData } = {}
-	local Character = Entity.Character
+	local Character = EntityInstance.Character
+	local ComponentTrove = Trove.new()
+
+	local StateChangedSignals: { [string]: typeof(Signal.new()) } = {}
 
 	for StateName, Definition in Config do
 		CurrentStates[StateName] = Definition.Default or false
 		StateCallbacks[StateName] = {}
+		StateChangedSignals[StateName] = ComponentTrove:Construct(Signal)
 
 		if Definition.Replicate ~= false and Character then
 			Character:SetAttribute(StateName, CurrentStates[StateName])
@@ -95,6 +107,11 @@ function StateComponent.Create(Entity: Entity, Context: EntityContext): StateIns
 			for _, Callback in Callbacks do
 				task.spawn(Callback, Value)
 			end
+		end
+
+		local ChangedSignal = StateChangedSignals[StateName]
+		if ChangedSignal then
+			ChangedSignal:Fire(Value)
 		end
 	end
 
@@ -153,9 +170,13 @@ function StateComponent.Create(Entity: Entity, Context: EntityContext): StateIns
 		for StateName in StateTimers do
 			ClearTimedState(StateName)
 		end
+
+		ComponentTrove:Destroy()
+
 		table.clear(CurrentStates)
 		table.clear(StateCallbacks)
 		table.clear(StateTimers)
+		table.clear(StateChangedSignals)
 	end
 
 	return {

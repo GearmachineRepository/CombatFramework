@@ -1,3 +1,5 @@
+--!strict
+
 local Combat = {}
 
 Combat.SkillExecutor = require(script.SkillExecutor)

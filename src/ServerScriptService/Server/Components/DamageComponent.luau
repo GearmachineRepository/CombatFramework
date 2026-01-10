@@ -1,11 +1,19 @@
 --!strict
 
 local ServerScriptService = game:GetService("ServerScriptService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Types = require(ServerScriptService.Server.Ensemble.Types)
+local Server = ServerScriptService:WaitForChild("Server")
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+
+local Types = require(Server.Ensemble.Types)
+local Packages = require(Shared.Packages)
 local StateComponent = require(script.Parent.StateComponent)
 local StatComponent = require(script.Parent.StatComponent)
 local ModifierComponent = require(script.Parent.ModifierComponent)
+
+local Trove = Packages.Trove
+local Signal = Packages.Signal
 
 type Entity = Types.Entity
 type EntityContext = Types.EntityContext
@@ -18,18 +26,22 @@ DamageComponent.Dependencies = { "States", "Stats", "Modifiers" }
 type DamageInstance = {
 	TakeDamage: (Amount: number, Source: Player?, Direction: Vector3?) -> (),
 	IsInvulnerable: () -> boolean,
+	OnDamaged: typeof(Signal.new()),
 	Destroy: () -> (),
 }
 
-function DamageComponent.From(Entity: Entity): Type?
-	return Entity:GetComponent("Damage")
+function DamageComponent.From(EntityInstance: Entity): DamageInstance?
+	return EntityInstance:GetComponent("Damage")
 end
 
-function DamageComponent.Create(Entity: Entity, _Context: EntityContext): DamageInstance
-	local States = StateComponent.From(Entity)
-	local Stats = StatComponent.From(Entity)
-	local Modifiers = ModifierComponent.From(Entity)
-	local Humanoid = Entity.Humanoid
+function DamageComponent.Create(EntityInstance: Entity, _Context: EntityContext): DamageInstance
+	local States = StateComponent.From(EntityInstance)
+	local Stats = StatComponent.From(EntityInstance)
+	local Modifiers = ModifierComponent.From(EntityInstance)
+	local Humanoid = EntityInstance.Humanoid
+	local ComponentTrove = Trove.new()
+
+	local DamagedSignal = ComponentTrove:Construct(Signal)
 
 	local function IsInvulnerable(): boolean
 		if not States then
@@ -52,20 +64,31 @@ function DamageComponent.Create(Entity: Entity, _Context: EntityContext): Damage
 			})
 		end
 
+		local OldHealth = Humanoid.Health
 		local NewHealth = math.max(0, Humanoid.Health - ModifiedDamage)
 		Humanoid.Health = NewHealth
 
 		if Stats then
 			Stats.SetStat("Health", NewHealth)
 		end
+
+		DamagedSignal:Fire({
+			Amount = ModifiedDamage,
+			Source = Source,
+			Direction = Direction,
+			OldHealth = OldHealth,
+			NewHealth = NewHealth,
+		})
 	end
 
 	local function Destroy()
+		ComponentTrove:Destroy()
 	end
 
 	return {
 		TakeDamage = TakeDamage,
 		IsInvulnerable = IsInvulnerable,
+		OnDamaged = DamagedSignal,
 		Destroy = Destroy,
 	}
 end

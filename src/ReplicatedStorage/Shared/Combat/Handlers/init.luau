@@ -1,34 +1,45 @@
 --!strict
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local CombatTypes = require(Shared.Types.CombatTypes)
+
+type BlockHandler = CombatTypes.BlockHandler
+
 local Handlers = {}
 
-local LoadedHandlers: { [string]: any } = {}
+local LoadedHandlers: { [string]: BlockHandler } = {}
 
-function Handlers.Configure()
-    for _, Module in script:GetChildren() do
-        if not Module:IsA("ModuleScript") then
-            continue
-        end
+local function Configure()
+	for _, Module in script:GetChildren() do
+		if not Module:IsA("ModuleScript") then
+			continue
+		end
 
-        local Success, Handler = pcall(require, Module)
-        if not Success then
-            warn(string.format("[Handlers] Failed to load %s: %s", Module.Name, tostring(Handler)))
-            continue
-        end
+		local Success, Handler = pcall(require, Module)
+		if not Success then
+			warn(string.format("[Handlers] Failed to load %s: %s", Module.Name, tostring(Handler)))
+			continue
+		end
 
-        local BlockType = string.gsub(Module.Name, "Handler", "")
-        LoadedHandlers[BlockType] = Handler
-    end
+		local BlockType = string.gsub(Module.Name, "Handler", "")
+		LoadedHandlers[BlockType] = Handler :: BlockHandler
+	end
 end
 
-function Handlers.Get(BlockType: string): any?
-    return LoadedHandlers[BlockType]
+function Handlers.Get(BlockType: string): BlockHandler?
+	return LoadedHandlers[BlockType]
 end
 
 function Handlers.Has(BlockType: string): boolean
-    return LoadedHandlers[BlockType] ~= nil
+	return LoadedHandlers[BlockType] ~= nil
 end
 
-Handlers.Configure()
+function Handlers.GetAll(): { [string]: BlockHandler }
+	return table.clone(LoadedHandlers)
+end
+
+Configure()
 
 return Handlers

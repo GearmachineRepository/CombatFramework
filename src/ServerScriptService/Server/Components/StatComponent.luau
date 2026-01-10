@@ -1,8 +1,16 @@
 --!strict
 
 local ServerScriptService = game:GetService("ServerScriptService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Types = require(ServerScriptService.Server.Ensemble.Types)
+local Server = ServerScriptService:WaitForChild("Server")
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+
+local Types = require(Server.Ensemble.Types)
+local Packages = require(Shared.Packages)
+
+local Trove = Packages.Trove
+local Signal = Packages.Signal
 
 type StatConfig = Types.StatConfig
 type EntityContext = Types.EntityContext
@@ -29,16 +37,19 @@ type StatInstance = {
 
 local UPDATE_THRESHOLD = 0.001
 
-function StatComponent.From(Entity: Entity): Type?
-	return Entity:GetComponent("Stats")
+function StatComponent.From(EntityInstance: Entity): StatInstance?
+	return EntityInstance:GetComponent("Stats")
 end
 
-function StatComponent.Create(Entity: Entity, Context: EntityContext): StatInstance
+function StatComponent.Create(EntityInstance: Entity, Context: EntityContext): StatInstance
 	local Config: StatConfig = Context.StatConfig or {}
 	local BaseStats: { [string]: number } = {}
 	local CurrentStats: { [string]: number } = {}
 	local StatCallbacks: { [string]: { (NewValue: number, OldValue: number) -> () } } = {}
-	local Character = Entity.Character
+	local Character = EntityInstance.Character
+	local ComponentTrove = Trove.new()
+
+	local StatChangedSignals: { [string]: typeof(Signal.new()) } = {}
 
 	local function GetBaseStat(StatName: string): number
 		return BaseStats[StatName] or 0
@@ -102,6 +113,11 @@ function StatComponent.Create(Entity: Entity, Context: EntityContext): StatInsta
 			for _, Callback in Callbacks do
 				task.spawn(Callback, NewValue, OldValue)
 			end
+		end
+
+		local ChangedSignal = StatChangedSignals[StatName]
+		if ChangedSignal then
+			ChangedSignal:Fire(NewValue, OldValue)
 		end
 	end
 
@@ -185,15 +201,18 @@ function StatComponent.Create(Entity: Entity, Context: EntityContext): StatInsta
 	end
 
 	local function Destroy()
+		ComponentTrove:Destroy()
 		table.clear(BaseStats)
 		table.clear(CurrentStats)
 		table.clear(StatCallbacks)
+		table.clear(StatChangedSignals)
 	end
 
 	for StatName, Definition in Config do
 		BaseStats[StatName] = Definition.Default
 		CurrentStats[StatName] = Definition.Default
 		StatCallbacks[StatName] = {}
+		StatChangedSignals[StatName] = ComponentTrove:Construct(Signal)
 
 		if Definition.Replicate ~= false and Character then
 			Character:SetAttribute(StatName, Definition.Default)

@@ -1,56 +1,69 @@
 --!strict
 
 local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local CombatTypes = require(Shared.Types.CombatTypes)
+
+type Block = CombatTypes.Block
+type ExecutionContext = CombatTypes.ExecutionContext
+type HandlerResult = CombatTypes.HandlerResult
 
 local IsServer = RunService:IsServer()
 
 local AnimationHandler = {}
 
-function AnimationHandler.Execute(Block: any, Context: any): any?
-    if IsServer then
-        return nil
-    end
+function AnimationHandler.Execute(Block: Block, Context: ExecutionContext): HandlerResult?
+	if IsServer then
+		return nil
+	end
 
-    local AnimationId = Block.AnimationId
-    local Speed = Block.Speed or 1
-    local Loop = Block.Loop or false
-    local LastHit = Block.LastHit or -1
+	local AnimationId = Block.AnimationId
+	if not AnimationId then
+		return nil
+	end
 
-    local Target
-    if LastHit >= 0 then
-        Target = Context.GetLastHitTarget()
-        if not Target then
-            return nil
-        end
-    else
-        Target = Context.Entity.Character
-    end
+	local Speed = Block.Speed or 1
+	local Loop = Block.Loop or false
+	local LastHit = Block.LastHit or -1
 
-    local Humanoid = Target:FindFirstChildOfClass("Humanoid")
-    if not Humanoid then
-        return nil
-    end
+	local Target: Model
+	if LastHit >= 0 then
+		local LastHitTarget = Context.GetLastHitTarget()
+		if not LastHitTarget then
+			return nil
+		end
+		Target = LastHitTarget
+	else
+		Target = Context.Entity.Character
+	end
 
-    local Animator = Humanoid:FindFirstChildOfClass("Animator")
-    if not Animator then
-        return nil
-    end
+	local Humanoid = Target:FindFirstChildOfClass("Humanoid")
+	if not Humanoid then
+		return nil
+	end
 
-    local Animation = Instance.new("Animation")
-    Animation.AnimationId = AnimationId
+	local Animator = Humanoid:FindFirstChildOfClass("Animator")
+	if not Animator then
+		return nil
+	end
 
-    local Track = Animator:LoadAnimation(Animation)
-    Track.Looped = Loop
-    Track:Play()
-    Track:AdjustSpeed(Speed)
+	local Animation = Instance.new("Animation")
+	Animation.AnimationId = AnimationId
 
-    if not Loop then
-        Track.Stopped:Wait()
-    end
+	local Track = Animator:LoadAnimation(Animation)
+	Track.Looped = Loop
+	Track:Play()
+	Track:AdjustSpeed(Speed)
 
-    Animation:Destroy()
+	if not Loop then
+		Track.Stopped:Wait()
+	end
 
-    return nil
+	Animation:Destroy()
+
+	return nil
 end
 
 return AnimationHandler
