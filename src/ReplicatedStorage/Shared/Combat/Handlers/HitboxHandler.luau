@@ -97,7 +97,7 @@ function HitboxHandler.Execute(Block: any, ExecutionContext: any): any?
 
 			if not IsServer then
 				Packets.HitCandidates:Fire(
-					ExecutionContext.SkillDefinition.SkillId,
+					ExecutionContext.ActionDefinition.ActionId,
 					Target.Name,
 					Damage,
 					Stun,
@@ -112,7 +112,7 @@ function HitboxHandler.Execute(Block: any, ExecutionContext: any): any?
 	else
 		ExecutionContext.EventBus:Publish(Enums.Combat.Hitbox.Missed, {
 			Entity = ExecutionContext.Entity,
-			SkillId = ExecutionContext.SkillDefinition.SkillId,
+			ActionId = ExecutionContext.ActionDefinition.ActionId,
 		})
 	end
 

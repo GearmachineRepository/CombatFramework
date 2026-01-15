@@ -112,31 +112,31 @@ function ToolbarController.OnToolUnequipped(Tool: Tool)
 end
 
 function ToolbarController.OnToolActivated(Tool: Tool)
-	local SkillId = Tool:GetAttribute("SkillId") :: string?
+	local ActionId = Tool:GetAttribute("ActionId") :: string?
 
-	if not SkillId then
+	if not ActionId then
 		return
 	end
 
-	ToolbarController.ToolActivated:Fire(Tool, SkillId)
+	ToolbarController.ToolActivated:Fire(Tool, ActionId)
 
-	local CanActivate, _Reason = CombatController.CanActivate(SkillId)
+	local CanActivate, _Reason = CombatController.CanActivate(ActionId)
 	if not CanActivate then
 		return
 	end
 
-	CombatController.ActivateSkill(SkillId)
+	CombatController.ActivateAction(ActionId)
 end
 
 function ToolbarController.GetEquippedTool(): Tool?
 	return EquippedTool
 end
 
-function ToolbarController.GetEquippedSkillId(): string?
+function ToolbarController.GetEquippedActionId(): string?
 	if not EquippedTool then
 		return nil
 	end
-	return EquippedTool:GetAttribute("SkillId") :: string?
+	return EquippedTool:GetAttribute("ActionId") :: string?
 end
 
 return ToolbarController

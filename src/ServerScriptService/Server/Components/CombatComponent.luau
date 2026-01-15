@@ -23,8 +23,8 @@ CombatComponent.ComponentName = "Combat"
 CombatComponent.Dependencies = { "States", "Stats" }
 
 type CombatInstance = {
-	GetActiveSkillId: () -> string?,
-	SetActiveSkill: (SkillId: string?) -> (),
+	GetActiveActionId: () -> string?,
+	SetActiveAction: (ActionId: string?) -> (),
 	CanAttack: () -> boolean,
 	CanBlock: () -> boolean,
 	IsStunned: () -> boolean,
@@ -35,7 +35,7 @@ type CombatInstance = {
 	ResetCombo: () -> (),
 	GetLastHitTime: () -> number,
 	SetLastHitTime: (Time: number) -> (),
-	OnSkillChanged: any,
+	OnActionChanged: any,
 	OnComboChanged: any,
 	Destroy: () -> (),
 }
@@ -48,24 +48,24 @@ function CombatComponent.Create(EntityInstance: Entity, _Context: EntityContext)
 	local States = StateComponent.From(EntityInstance)
 	local ComponentTrove = Trove.new()
 
-	local ActiveSkillId: string? = nil
+	local ActiveActionId: string? = nil
 	local LastAttacker: Player? = nil
 	local ComboCount: number = 0
 	local LastHitTime: number = 0
 
-	local SkillChangedSignal = ComponentTrove:Construct(Signal)
+	local ActionChangedSignal = ComponentTrove:Construct(Signal)
 	local ComboChangedSignal = ComponentTrove:Construct(Signal)
 
-	local function GetActiveSkillId(): string?
-		return ActiveSkillId
+	local function GetActiveActionId(): string?
+		return ActiveActionId
 	end
 
-	local function SetActiveSkill(SkillId: string?)
-		if ActiveSkillId == SkillId then
+	local function SetActiveAction(ActionId: string?)
+		if ActiveActionId == ActionId then
 			return
 		end
-		ActiveSkillId = SkillId
-		SkillChangedSignal:Fire(SkillId)
+		ActiveActionId = ActionId
+		ActionChangedSignal:Fire(ActionId)
 	end
 
 	local function CanAttack(): boolean
@@ -101,7 +101,7 @@ function CombatComponent.Create(EntityInstance: Entity, _Context: EntityContext)
 			return false
 		end
 
-		if ActiveSkillId then
+		if ActiveActionId then
 			return false
 		end
 
@@ -153,8 +153,8 @@ function CombatComponent.Create(EntityInstance: Entity, _Context: EntityContext)
 	end
 
 	return {
-		GetActiveSkillId = GetActiveSkillId,
-		SetActiveSkill = SetActiveSkill,
+		GetActiveActionId = GetActiveActionId,
+		SetActiveAction = SetActiveAction,
 		CanAttack = CanAttack,
 		CanBlock = CanBlock,
 		IsStunned = IsStunned,
@@ -165,7 +165,7 @@ function CombatComponent.Create(EntityInstance: Entity, _Context: EntityContext)
 		ResetCombo = ResetCombo,
 		GetLastHitTime = GetLastHitTime,
 		SetLastHitTime = SetLastHitTime,
-		OnSkillChanged = SkillChangedSignal,
+		OnActionChanged = ActionChangedSignal,
 		OnComboChanged = ComboChangedSignal,
 		Destroy = Destroy,
 	}

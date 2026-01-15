@@ -4,7 +4,7 @@ return {
 	Icon = "",
 	Slot = 2,
 	Cooldown = 0.5,
-	SkillId = "TestPunch",
+	ActionId = "TestPunch",
 	GroundOnly = false,
 	RequiresTarget = false,
 }

@@ -4,37 +4,37 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
-local SkillHandler = {}
+local ActionHandler = {}
 
-local SkillRegistry: any = nil
+local ActionRegistry: any = nil
 
-local function GetSkillRegistry(): any
-    if not SkillRegistry then
-        SkillRegistry = require(Shared.Combat.SkillRegistry)
+local function GetActionRegistry(): any
+    if not ActionRegistry then
+        ActionRegistry = require(Shared.Combat.ActionRegistry)
     end
-    return SkillRegistry
+    return ActionRegistry
 end
 
-function SkillHandler.Execute(Block: any, Context: any): any?
-    local SkillId = Block.SkillId
+function ActionHandler.Execute(Block: any, Context: any): any?
+    local ActionId = Block.ActionId
     local _Speed = Block.Speed or 1
     local _CancelLast = Block.CancelLast or false
     local _HoldFor = Block.HoldFor or 0
 
-    if not SkillId or SkillId == "Cancel" then
+    if not ActionId or ActionId == "Cancel" then
         return nil
     end
 
-    local Registry = GetSkillRegistry()
-    local SkillDef = Registry.Get(SkillId)
+    local Registry = GetActionRegistry()
+    local ActionDef = Registry.Get(ActionId)
 
-    if not SkillDef then
-        warn(string.format("[SkillHandler] Unknown skill: %s", SkillId))
+    if not ActionDef then
+        warn(string.format("[ActionHandler] Unknown Action: %s", ActionId))
         return nil
     end
 
-    local SkillExecutor = require(script.Parent.Parent.SkillExecutor)
-    local SubContext = SkillExecutor.Execute(Context.Entity, SkillDef, Context.EventBus)
+    local ActionExecutor = require(script.Parent.Parent.ActionExecutor)
+    local SubContext = ActionExecutor.Execute(Context.Entity, ActionDef, Context.EventBus)
 
     for _, Record in SubContext.HitRecords do
         Context.RecordHit(Record.Target, Record.Damage)
@@ -43,4 +43,4 @@ function SkillHandler.Execute(Block: any, Context: any): any?
     return nil
 end
 
-return SkillHandler
+return ActionHandler

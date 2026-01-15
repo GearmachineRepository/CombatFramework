@@ -77,9 +77,9 @@ export type HitCancelBlock = {
 	Branch: string?,
 }
 
-export type SkillBlock = {
+export type ActionBlock = {
 	BlockType: string,
-	SkillId: string,
+	ActionId: string,
 	Speed: number?,
 	CancelLast: boolean?,
 	HoldFor: number?,
@@ -97,7 +97,7 @@ export type AddResourceBlock = {
 	Amount: number?,
 }
 
-export type SkillConditions = {
+export type ActionConditions = {
 	OnAir: boolean?,
 	HasTarget: boolean?,
 	IsAwakened: boolean?,
@@ -105,7 +105,7 @@ export type SkillConditions = {
 	Durability: number?,
 }
 
-export type SkillProperties = {
+export type ActionProperties = {
 	DamageMultiplier: number?,
 	KnockbackMultiplier: number?,
 	Invincible: boolean?,
@@ -116,13 +116,13 @@ export type Branch = {
 	Timeline: { Block },
 }
 
-export type SkillDefinition = {
-	SkillId: string,
+export type ActionDefinition = {
+	ActionId: string,
 	DisplayName: string?,
 	Timeline: { Block }?,
 	Branches: { [string]: Branch }?,
-	Conditions: SkillConditions?,
-	Properties: SkillProperties?,
+	Conditions: ActionConditions?,
+	Properties: ActionProperties?,
 }
 
 export type ToolDefinition = {
@@ -131,7 +131,7 @@ export type ToolDefinition = {
 	Icon: string,
 	DefaultSlot: number,
 	Cooldown: number,
-	SkillId: string,
+	ActionId: string,
 	GroundOnly: boolean?,
 	RequiresTarget: boolean?,
 	AwakeningOnly: boolean?,
@@ -145,11 +145,11 @@ export type HitRecord = {
 
 export type ExecutionContext = {
 	Entity: ExecutionEntity,
-	SkillDefinition: SkillDefinition,
+	ActionDefinition: ActionDefinition,
 	EventBus: EventBus,
 	StartTime: number,
 	Canceled: boolean,
-	Properties: SkillProperties,
+	Properties: ActionProperties,
 	HitRecords: { HitRecord },
 	LastHitTarget: Model?,
 

@@ -21,22 +21,22 @@ local StateComponent = require(Server.Components.StateComponent)
 local CombatComponent = require(Server.Components.CombatComponent)
 local DamageComponent = require(Server.Components.DamageComponent)
 
-local SkillExecutor = Combat.SkillExecutor
-local SkillRegistry = Combat.SkillRegistry
+local ActionExecutor = Combat.ActionExecutor
+local ActionRegistry = Combat.ActionRegistry
 local ToolRegistry = Combat.ToolRegistry
 
 type ExecutionEntity = CombatTypes.ExecutionEntity
 type ExecutionContext = CombatTypes.ExecutionContext
 type HitData = CombatTypes.HitData
 
-local SkillService = {}
+local ActionService = {}
 
-SkillService.Dependencies = { "EntityService" }
+ActionService.Dependencies = { "EntityService" }
 
-SkillService.SkillActivated = Signal.new()
-SkillService.SkillCompleted = Signal.new()
-SkillService.SkillCanceled = Signal.new()
-SkillService.HitConfirmed = Signal.new()
+ActionService.ActionActivated = Signal.new()
+ActionService.ActionCompleted = Signal.new()
+ActionService.ActionCanceled = Signal.new()
+ActionService.HitConfirmed = Signal.new()
 
 local ServiceTrove: typeof(Trove.new()) = nil :: any
 local Cooldowns: { [Player]: { [string]: number } } = {}
@@ -45,12 +45,12 @@ local ActiveContexts: { [Model]: ExecutionContext } = {}
 local LAG_TOLERANCE = 0.2
 local MAX_HIT_RANGE = 25
 
-function SkillService.Init()
+function ActionService.Init()
 	ServiceTrove = Trove.new()
 
-	local SkillsFolder = Shared:FindFirstChild("Data") and Shared.Data:FindFirstChild("Skills")
-	if SkillsFolder then
-		SkillRegistry.LoadFolder(SkillsFolder)
+	local ActionsFolder = Shared:FindFirstChild("Data") and Shared.Data:FindFirstChild("Actions")
+	if ActionsFolder then
+		ActionRegistry.LoadFolder(ActionsFolder)
 	end
 
 	local ToolsFolder = Shared:FindFirstChild("Data") and Shared.Data:FindFirstChild("Tools")
@@ -59,18 +59,18 @@ function SkillService.Init()
 	end
 end
 
-function SkillService.Start()
-	ServiceTrove:Connect(Packets.SkillActivate.OnServerEvent :: any, function(Player: Player, SkillId: string, Timestamp: number)
-		SkillService.OnSkillRequested(Player, SkillId, Timestamp)
+function ActionService.Start()
+	ServiceTrove:Connect(Packets.ActionActivate.OnServerEvent :: any, function(Player: Player, ActionId: string, Timestamp: number)
+		ActionService.OnActionRequested(Player, ActionId, Timestamp)
 	end)
 
-	ServiceTrove:Connect(Packets.SkillCancel.OnServerEvent :: any, function(Player: Player, SkillId: string)
-		SkillService.OnSkillCanceled(Player, SkillId)
+	ServiceTrove:Connect(Packets.ActionCancel.OnServerEvent :: any, function(Player: Player, ActionId: string)
+		ActionService.OnActionCanceled(Player, ActionId)
 	end)
 
 	ServiceTrove:Connect(Packets.HitCandidates.OnServerEvent :: any, function(
 		Player: Player,
-		SkillId: string,
+		ActionId: string,
 		TargetName: string,
 		Damage: number,
 		Stun: number,
@@ -80,7 +80,7 @@ function SkillService.Start()
 		CancelEnemy: boolean,
 		Timestamp: number
 	)
-		SkillService.OnHitCandidate(Player, SkillId, TargetName, Damage, Stun, AttackType, Blockable, Block360, CancelEnemy, Timestamp)
+		ActionService.OnHitCandidate(Player, ActionId, TargetName, Damage, Stun, AttackType, Blockable, Block360, CancelEnemy, Timestamp)
 	end)
 
 	ServiceTrove:Connect(Players.PlayerRemoving, function(Player: Player)
@@ -88,23 +88,23 @@ function SkillService.Start()
 	end)
 
 	ServiceTrove:Add(Ensemble.Events:Subscribe(Enums.Combat.Hitbox.Hit, function(Data: any)
-		SkillService.ProcessHit(Data)
+		ActionService.ProcessHit(Data)
 	end))
 end
 
-function SkillService.Stop()
+function ActionService.Stop()
 	ServiceTrove:Destroy()
 	table.clear(Cooldowns)
 	table.clear(ActiveContexts)
 end
 
-function SkillService.IsOnCooldown(Player: Player, SkillId: string): boolean
+function ActionService.IsOnCooldown(Player: Player, ActionId: string): boolean
 	local PlayerCooldowns = Cooldowns[Player]
 	if not PlayerCooldowns then
 		return false
 	end
 
-	local CooldownEnd = PlayerCooldowns[SkillId]
+	local CooldownEnd = PlayerCooldowns[ActionId]
 	if not CooldownEnd then
 		return false
 	end
@@ -112,17 +112,17 @@ function SkillService.IsOnCooldown(Player: Player, SkillId: string): boolean
 	return tick() < CooldownEnd
 end
 
-function SkillService.StartCooldown(Player: Player, SkillId: string, Duration: number)
+function ActionService.StartCooldown(Player: Player, ActionId: string, Duration: number)
 	if not Cooldowns[Player] then
 		Cooldowns[Player] = {}
 	end
 
-	Cooldowns[Player][SkillId] = tick() + Duration
-	Packets.CooldownStarted:FireClient(Player, SkillId, Duration)
+	Cooldowns[Player][ActionId] = tick() + Duration
+	Packets.CooldownStarted:FireClient(Player, ActionId, Duration)
 end
 
-function SkillService.CanActivate(Player: Player, SkillId: string): (boolean, string?)
-	if SkillService.IsOnCooldown(Player, SkillId) then
+function ActionService.CanActivate(Player: Player, ActionId: string): (boolean, string?)
+	if ActionService.IsOnCooldown(Player, ActionId) then
 		return false, "OnCooldown"
 	end
 
@@ -137,12 +137,12 @@ function SkillService.CanActivate(Player: Player, SkillId: string): (boolean, st
 	end
 
 	if ActiveContexts[Character] then
-		return false, "SkillActive"
+		return false, "ActionActive"
 	end
 
-	local SkillDef = SkillRegistry.Get(SkillId)
-	if not SkillDef then
-		return false, "UnknownSkill"
+	local ActionDef = ActionRegistry.Get(ActionId)
+	if not ActionDef then
+		return false, "UnknownAction"
 	end
 
 	local States = StateComponent.From(Entity)
@@ -163,19 +163,19 @@ function SkillService.CanActivate(Player: Player, SkillId: string): (boolean, st
 
 	local Humanoid = Entity.Humanoid
 
-	if SkillDef.Conditions then
-		if SkillDef.Conditions.OnAir == false then
+	if ActionDef.Conditions then
+		if ActionDef.Conditions.OnAir == false then
 			if Humanoid.FloorMaterial == Enum.Material.Air then
 				return false, "NotGrounded"
 			end
-		elseif SkillDef.Conditions.OnAir == true then
+		elseif ActionDef.Conditions.OnAir == true then
 			if Humanoid.FloorMaterial ~= Enum.Material.Air then
 				return false, "NotAirborne"
 			end
 		end
 	end
 
-	local Tool = ToolRegistry.GetBySkillId(SkillId)
+	local Tool = ToolRegistry.GetByActionId(ActionId)
 	if Tool and Tool.GroundOnly then
 		if Humanoid.FloorMaterial == Enum.Material.Air then
 			return false, "NotGrounded"
@@ -185,11 +185,11 @@ function SkillService.CanActivate(Player: Player, SkillId: string): (boolean, st
 	return true, nil
 end
 
-function SkillService.OnSkillRequested(Player: Player, SkillId: string, _Timestamp: number)
-	local CanUse, Reason = SkillService.CanActivate(Player, SkillId)
+function ActionService.OnActionRequested(Player: Player, ActionId: string, _Timestamp: number)
+	local CanUse, Reason = ActionService.CanActivate(Player, ActionId)
 
 	if not CanUse then
-		Packets.SkillRejected:FireClient(Player, SkillId, Reason or "Unknown")
+		Packets.ActionRejected:FireClient(Player, ActionId, Reason or "Unknown")
 		return
 	end
 
@@ -199,19 +199,19 @@ function SkillService.OnSkillRequested(Player: Player, SkillId: string, _Timesta
 		return
 	end
 
-	local SkillDef = SkillRegistry.Get(SkillId)
-	if not SkillDef then
+	local ActionDef = ActionRegistry.Get(ActionId)
+	if not ActionDef then
 		return
 	end
 
-	local Tool = ToolRegistry.GetBySkillId(SkillId)
+	local Tool = ToolRegistry.GetByActionId(ActionId)
 	if Tool and Tool.Cooldown then
-		SkillService.StartCooldown(Player, SkillId, Tool.Cooldown)
+		ActionService.StartCooldown(Player, ActionId, Tool.Cooldown)
 	end
 
 	local CombatComp = CombatComponent.From(Entity)
 	if CombatComp then
-		CombatComp.SetActiveSkill(SkillId)
+		CombatComp.SetActiveAction(ActionId)
 	end
 
 	local ExecutionEntity: ExecutionEntity = {
@@ -222,29 +222,29 @@ function SkillService.OnSkillRequested(Player: Player, SkillId: string, _Timesta
 	}
 
 	task.spawn(function()
-		local Context = SkillExecutor.CreateContext(ExecutionEntity, SkillDef, Ensemble.Events)
+		local Context = ActionExecutor.CreateContext(ExecutionEntity, ActionDef, Ensemble.Events)
 		ActiveContexts[Character] = Context
 
-		SkillService.SkillActivated:Fire(Entity, SkillId)
+		ActionService.ActionActivated:Fire(Entity, ActionId)
 
-		SkillExecutor.Run(Context)
+		ActionExecutor.Run(Context)
 
 		local WasCanceled = Context.Canceled
 		ActiveContexts[Character] = nil
 
 		if CombatComp then
-			CombatComp.SetActiveSkill(nil)
+			CombatComp.SetActiveAction(nil)
 		end
 
 		if WasCanceled then
-			SkillService.SkillCanceled:Fire(Entity, SkillId)
+			ActionService.ActionCanceled:Fire(Entity, ActionId)
 		else
-			SkillService.SkillCompleted:Fire(Entity, SkillId)
+			ActionService.ActionCompleted:Fire(Entity, ActionId)
 		end
 	end)
 end
 
-function SkillService.OnSkillCanceled(Player: Player, _SkillId: string)
+function ActionService.OnActionCanceled(Player: Player, _ActionId: string)
 	local Character = Player.Character
 	if not Character then
 		return
@@ -252,13 +252,13 @@ function SkillService.OnSkillCanceled(Player: Player, _SkillId: string)
 
 	local Context = ActiveContexts[Character]
 	if Context then
-		SkillExecutor.Cancel(Context)
+		ActionExecutor.Cancel(Context)
 	end
 end
 
-function SkillService.OnHitCandidate(
+function ActionService.OnHitCandidate(
     Player: Player,
-    SkillId: string,
+    ActionId: string,
     TargetName: string,
     Damage: number,
     Stun: number,
@@ -278,7 +278,7 @@ function SkillService.OnHitCandidate(
 		return
 	end
 
-	if Context.SkillDefinition.SkillId ~= SkillId then
+	if Context.ActionDefinition.ActionId ~= ActionId then
 		return
 	end
 
@@ -334,7 +334,7 @@ function SkillService.OnHitCandidate(
     })
 end
 
-function SkillService.ProcessHit(Data: any)
+function ActionService.ProcessHit(Data: any)
 	local Target = Data.Target :: Model
 	local Damage = Data.Damage or 0
 	local Stun = Data.Stun or 0
@@ -402,18 +402,18 @@ function SkillService.ProcessHit(Data: any)
 		AttackType
 	)
 
-	SkillService.HitConfirmed:Fire(Data)
+	ActionService.HitConfirmed:Fire(Data)
 end
 
-function SkillService.GetActiveContext(Character: Model): ExecutionContext?
+function ActionService.GetActiveContext(Character: Model): ExecutionContext?
 	return ActiveContexts[Character]
 end
 
-function SkillService.CancelActiveSkill(Character: Model)
+function ActionService.CancelActiveAction(Character: Model)
 	local Context = ActiveContexts[Character]
 	if Context then
-		SkillExecutor.Cancel(Context)
+		ActionExecutor.Cancel(Context)
 	end
 end
 
-return SkillService
+return ActionService

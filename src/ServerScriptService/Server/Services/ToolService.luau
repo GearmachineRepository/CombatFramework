@@ -109,7 +109,7 @@ function ToolService.GiveTools(Player: Player, _Character: Model)
         if not Tool then return end
 
         Tool:SetAttribute("ToolId", ToolId)
-        Tool:SetAttribute("SkillId", ToolDef.SkillId)
+        Tool:SetAttribute("ActionId", ToolDef.ActionId)
         Tool:SetAttribute("Slot", Slot)
         Tool.Parent = Backpack
     end

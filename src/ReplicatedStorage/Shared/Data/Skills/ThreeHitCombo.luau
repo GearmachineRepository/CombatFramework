@@ -1,7 +1,7 @@
 --!strict
 
 return {
-	SkillId = "ThreeHitCombo",
+	ActionId = "ThreeHitCombo",
 	DisplayName = "Three Hit Combo",
 
 	Branches = {

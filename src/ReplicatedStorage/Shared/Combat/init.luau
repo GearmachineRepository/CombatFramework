@@ -2,9 +2,9 @@
 
 local Combat = {}
 
-Combat.SkillExecutor = require(script.SkillExecutor)
+Combat.ActionExecutor = require(script.ActionExecutor)
 Combat.ExecutionContext = require(script.ExecutionContext)
-Combat.SkillRegistry = require(script.SkillRegistry)
+Combat.ActionRegistry = require(script.ActionRegistry)
 Combat.ToolRegistry = require(script.ToolRegistry)
 Combat.Handlers = require(script.Handlers)
 

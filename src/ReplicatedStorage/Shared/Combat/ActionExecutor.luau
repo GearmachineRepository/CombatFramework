@@ -9,71 +9,71 @@ local Handlers = require(script.Parent.Handlers)
 local ExecutionContextModule = require(script.Parent.ExecutionContext)
 
 type ExecutionEntity = CombatTypes.ExecutionEntity
-type SkillDefinition = CombatTypes.SkillDefinition
+type ActionDefinition = CombatTypes.ActionDefinition
 type ExecutionContext = CombatTypes.ExecutionContext
 type Branch = CombatTypes.Branch
 type Block = CombatTypes.Block
 type HandlerResult = CombatTypes.HandlerResult
 
-local SkillExecutor = {}
+local ActionExecutor = {}
 
-function SkillExecutor.CreateContext(
+function ActionExecutor.CreateContext(
 	Entity: ExecutionEntity,
-	SkillDefinition: SkillDefinition,
+	ActionDefinition: ActionDefinition,
 	EventBus: any
 ): ExecutionContext
-	return ExecutionContextModule.Create(Entity, SkillDefinition, EventBus)
+	return ExecutionContextModule.Create(Entity, ActionDefinition, EventBus)
 end
 
-function SkillExecutor.Run(ExecutionContext: ExecutionContext)
+function ActionExecutor.Run(ExecutionContext: ExecutionContext)
 	local Entity = ExecutionContext.Entity
-	local SkillDefinition = ExecutionContext.SkillDefinition
+	local ActionDefinition = ExecutionContext.ActionDefinition
 	local EventBus = ExecutionContext.EventBus
 
-	EventBus:Publish(Enums.Combat.Skill.Activated, {
+	EventBus:Publish(Enums.Combat.Action.Activated, {
 		Entity = Entity,
-		SkillId = SkillDefinition.SkillId,
+		ActionId = ActionDefinition.ActionId,
 	})
 
-	local EntryBranch = SkillExecutor.GetEntryBranch(SkillDefinition)
-	SkillExecutor.RunBranch(EntryBranch, ExecutionContext)
+	local EntryBranch = ActionExecutor.GetEntryBranch(ActionDefinition)
+	ActionExecutor.RunBranch(EntryBranch, ExecutionContext)
 
 	if ExecutionContext.Canceled then
-		EventBus:Publish(Enums.Combat.Skill.Canceled, {
+		EventBus:Publish(Enums.Combat.Action.Canceled, {
 			Entity = Entity,
-			SkillId = SkillDefinition.SkillId,
+			ActionId = ActionDefinition.ActionId,
 		})
 	else
-		EventBus:Publish(Enums.Combat.Skill.Completed, {
+		EventBus:Publish(Enums.Combat.Action.Completed, {
 			Entity = Entity,
-			SkillId = SkillDefinition.SkillId,
+			ActionId = ActionDefinition.ActionId,
 		})
 	end
 end
 
-function SkillExecutor.Execute(
+function ActionExecutor.Execute(
 	Entity: ExecutionEntity,
-	SkillDefinition: SkillDefinition,
+	ActionDefinition: ActionDefinition,
 	EventBus: any
 ): ExecutionContext
-	local ExecutionContext = SkillExecutor.CreateContext(Entity, SkillDefinition, EventBus)
-	SkillExecutor.Run(ExecutionContext)
+	local ExecutionContext = ActionExecutor.CreateContext(Entity, ActionDefinition, EventBus)
+	ActionExecutor.Run(ExecutionContext)
 	return ExecutionContext
 end
 
-function SkillExecutor.GetEntryBranch(SkillDefinition: SkillDefinition): Branch
-	if SkillDefinition.Timeline then
-		return { Timeline = SkillDefinition.Timeline }
+function ActionExecutor.GetEntryBranch(ActionDefinition: ActionDefinition): Branch
+	if ActionDefinition.Timeline then
+		return { Timeline = ActionDefinition.Timeline }
 	end
 
-	if SkillDefinition.Branches then
-		for _, BranchData in SkillDefinition.Branches do
+	if ActionDefinition.Branches then
+		for _, BranchData in ActionDefinition.Branches do
 			if BranchData.Entry then
 				return BranchData
 			end
 		end
 
-		local MainBranch = SkillDefinition.Branches["Main"]
+		local MainBranch = ActionDefinition.Branches["Main"]
 		if MainBranch then
 			return MainBranch
 		end
@@ -82,7 +82,7 @@ function SkillExecutor.GetEntryBranch(SkillDefinition: SkillDefinition): Branch
 	return { Timeline = {} }
 end
 
-function SkillExecutor.RunBranch(BranchData: Branch, ExecutionContext: ExecutionContext)
+function ActionExecutor.RunBranch(BranchData: Branch, ExecutionContext: ExecutionContext)
 	local Timeline = BranchData.Timeline
 	if not Timeline then
 		return
@@ -110,15 +110,15 @@ function SkillExecutor.RunBranch(BranchData: Branch, ExecutionContext: Execution
 
 		if HandlerResult then
 			if HandlerResult.JumpToBranch then
-				local Branches = ExecutionContext.SkillDefinition.Branches
+				local Branches = ExecutionContext.ActionDefinition.Branches
 				local TargetBranch = Branches and Branches[HandlerResult.JumpToBranch]
 				if TargetBranch then
-					ExecutionContext.EventBus:Publish(Enums.Combat.Skill.BranchChanged, {
+					ExecutionContext.EventBus:Publish(Enums.Combat.Action.BranchChanged, {
 						Entity = ExecutionContext.Entity,
-						SkillId = ExecutionContext.SkillDefinition.SkillId,
+						ActionId = ExecutionContext.ActionDefinition.ActionId,
 						Branch = HandlerResult.JumpToBranch,
 					})
-					SkillExecutor.RunBranch(TargetBranch, ExecutionContext)
+					ActionExecutor.RunBranch(TargetBranch, ExecutionContext)
 				end
 				return
 			end
@@ -131,10 +131,10 @@ function SkillExecutor.RunBranch(BranchData: Branch, ExecutionContext: Execution
 	end
 end
 
-function SkillExecutor.Cancel(ExecutionContext: ExecutionContext)
+function ActionExecutor.Cancel(ExecutionContext: ExecutionContext)
 	if ExecutionContext and not ExecutionContext.Canceled then
 		ExecutionContext.Cancel()
 	end
 end
 
-return SkillExecutor
+return ActionExecutor

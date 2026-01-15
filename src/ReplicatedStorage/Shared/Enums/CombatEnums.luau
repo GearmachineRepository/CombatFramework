@@ -8,7 +8,7 @@ return table.freeze({
 		Velocity = "Velocity",
 		Hitbox = "Hitbox",
 		HitCancel = "HitCancel",
-		Skill = "Skill",
+		Action = "Action",
 		Connect = "Connect",
 		AddAwakening = "AddAwakening",
 		AddHealth = "AddHealth",
@@ -24,12 +24,12 @@ return table.freeze({
 		Domain = "Domain",
 	}),
 
-	Skill = table.freeze({
-		Activated = "Combat.Skill.Activated",
-		Completed = "Combat.Skill.Completed",
-		Canceled = "Combat.Skill.Canceled",
-		Rejected = "Combat.Skill.Rejected",
-		BranchChanged = "Combat.Skill.BranchChanged",
+	Action = table.freeze({
+		Activated = "Combat.Action.Activated",
+		Completed = "Combat.Action.Completed",
+		Canceled = "Combat.Action.Canceled",
+		Rejected = "Combat.Action.Rejected",
+		BranchChanged = "Combat.Action.BranchChanged",
 	}),
 
 	Hitbox = table.freeze({

@@ -6,7 +6,7 @@ return {
 	Icon = "",
 	Slot = 3,
 	Cooldown = 2,
-	SkillId = "ThreeHitCombo",
+	ActionId = "ThreeHitCombo",
 	GroundOnly = false,
 	RequiresTarget = false,
 }

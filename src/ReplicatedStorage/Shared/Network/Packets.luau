@@ -144,25 +144,25 @@ return {
 	),
 
 
-    SkillActivate = Packet(
-        "SkillActivate",
+    ActionActivate = Packet(
+        "ActionActivate",
         Packet.String,
         Packet.NumberF64
     ),
 
-    SkillCancel = Packet(
-        "SkillCancel",
+    ActionCancel = Packet(
+        "ActionCancel",
         Packet.String
     ),
 
-    SkillRejected = Packet(
-        "SkillRejected",
+    ActionRejected = Packet(
+        "ActionRejected",
         Packet.String,
         Packet.String
     ),
 
-    SkillSync = Packet(
-        "SkillSync",
+    ActionSync = Packet(
+        "ActionSync",
         Packet.String,
         Packet.String,
         Packet.Boolean8
@@ -170,7 +170,7 @@ return {
 
 	HitCandidates = Packet(
 		"HitCandidates",
-		Packet.String,      -- SkillId
+		Packet.String,      -- ActionId
 		Packet.String,      -- TargetName
 		Packet.NumberF32,   -- Damage
 		Packet.NumberF32,   -- Stun

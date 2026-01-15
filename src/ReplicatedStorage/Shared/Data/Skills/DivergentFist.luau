@@ -1,7 +1,7 @@
 --!strict
 
 return {
-	SkillId = "DivergentFist",
+	ActionId = "DivergentFist",
 	DisplayName = "Divergent Fist",
 
 	Branches = {

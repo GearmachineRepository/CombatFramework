@@ -4,7 +4,7 @@ return {
     Icon = "rbxassetid://123456",
     Slot = 1,
     Cooldown = 4,
-    SkillId = "DivergentFist",
+    ActionId = "DivergentFist",
     GroundOnly = true,
     RequiresTarget = false,
 }

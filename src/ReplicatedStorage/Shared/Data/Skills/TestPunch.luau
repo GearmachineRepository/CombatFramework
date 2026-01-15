@@ -1,7 +1,7 @@
 --!strict
 
 return {
-	SkillId = "TestPunch",
+	ActionId = "TestPunch",
 	DisplayName = "Test Punch",
 
 	Timeline = {

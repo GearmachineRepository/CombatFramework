@@ -9,15 +9,15 @@ local CombatTypes = require(Shared.Types.CombatTypes)
 local TableUtil = Packages.TableUtil
 
 type ExecutionEntity = CombatTypes.ExecutionEntity
-type SkillDefinition = CombatTypes.SkillDefinition
-type SkillProperties = CombatTypes.SkillProperties
+type ActionDefinition = CombatTypes.ActionDefinition
+type ActionProperties = CombatTypes.ActionProperties
 type HitRecord = CombatTypes.HitRecord
 type ExecutionContext = CombatTypes.ExecutionContext
 type EventBus = CombatTypes.EventBus
 
 local ExecutionContextModule = {}
 
-local DEFAULT_PROPERTIES: SkillProperties = table.freeze({
+local DEFAULT_PROPERTIES: ActionProperties = table.freeze({
 	DamageMultiplier = 1,
 	KnockbackMultiplier = 1,
 	Invincible = false,
@@ -25,14 +25,14 @@ local DEFAULT_PROPERTIES: SkillProperties = table.freeze({
 
 function ExecutionContextModule.Create(
 	Entity: ExecutionEntity,
-	SkillDefinition: SkillDefinition,
+	ActionDefinition: ActionDefinition,
 	EventBus: any
 ): ExecutionContext
 	local StartTime = tick()
 
 	local Properties: any = TableUtil.Copy(DEFAULT_PROPERTIES)
-	if SkillDefinition.Properties then
-		Properties = TableUtil.Assign(Properties, SkillDefinition.Properties)
+	if ActionDefinition.Properties then
+		Properties = TableUtil.Assign(Properties, ActionDefinition.Properties)
 	end
 
 	local HitRecords: { HitRecord } = {}
@@ -73,7 +73,7 @@ function ExecutionContextModule.Create(
 
 	local Context: ExecutionContext = {
 		Entity = Entity,
-		SkillDefinition = SkillDefinition,
+		ActionDefinition = ActionDefinition,
 		EventBus = EventBus,
 		StartTime = StartTime,
 		Canceled = Canceled,
@@ -93,9 +93,9 @@ function ExecutionContextModule.Create(
 			if Key == "Canceled" then
 				return Canceled
 			elseif Key == "HitRecords" then
-				return HitRecords
+				return HitRecords :: any
 			elseif Key == "LastHitTarget" then
-				return LastHitTarget
+				return LastHitTarget :: any
 			else
 				return (Context :: any)[Key]
 			end

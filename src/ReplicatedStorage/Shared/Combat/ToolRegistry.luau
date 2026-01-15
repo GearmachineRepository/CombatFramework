@@ -3,7 +3,7 @@
 local ToolRegistry = {}
 
 local Tools: { [string]: any } = {}
-local SkillToTool: { [string]: any } = {}
+local ActionToTool: { [string]: any } = {}
 
 function ToolRegistry.Register(ToolDefinition: any)
     if not ToolDefinition.ToolId then
@@ -12,8 +12,8 @@ function ToolRegistry.Register(ToolDefinition: any)
     end
     Tools[ToolDefinition.ToolId] = ToolDefinition
 
-    if ToolDefinition.SkillId then
-        SkillToTool[ToolDefinition.SkillId] = ToolDefinition
+    if ToolDefinition.ActionId then
+        ActionToTool[ToolDefinition.ActionId] = ToolDefinition
     end
 end
 
@@ -21,8 +21,8 @@ function ToolRegistry.Get(ToolId: string): any?
     return Tools[ToolId]
 end
 
-function ToolRegistry.GetBySkillId(SkillId: string): any?
-    return SkillToTool[SkillId]
+function ToolRegistry.GetByActionId(ActionId: string): any?
+    return ActionToTool[ActionId]
 end
 
 function ToolRegistry.Has(ToolId: string): boolean

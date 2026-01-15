@@ -15,13 +15,13 @@ local CombatTypes = require(Shared.Types.CombatTypes)
 local Trove = Packages.Trove
 local Signal = Packages.Signal
 
-local SkillExecutor = Combat.SkillExecutor
-local SkillRegistry = Combat.SkillRegistry
+local ActionExecutor = Combat.ActionExecutor
+local ActionRegistry = Combat.ActionRegistry
 local ToolRegistry = Combat.ToolRegistry
 
 type ExecutionEntity = CombatTypes.ExecutionEntity
 type ExecutionContext = CombatTypes.ExecutionContext
-type SkillDefinition = CombatTypes.SkillDefinition
+type ActionDefinition = CombatTypes.ActionDefinition
 
 local LocalPlayer = Players.LocalPlayer :: Player
 
@@ -29,10 +29,10 @@ local CombatController = {}
 
 CombatController.Dependencies = {}
 
-CombatController.SkillActivated = Signal.new()
-CombatController.SkillCompleted = Signal.new()
-CombatController.SkillCanceled = Signal.new()
-CombatController.SkillRejected = Signal.new()
+CombatController.ActionActivated = Signal.new()
+CombatController.ActionCompleted = Signal.new()
+CombatController.ActionCanceled = Signal.new()
+CombatController.ActionRejected = Signal.new()
 CombatController.HitConfirmed = Signal.new()
 
 local ControllerTrove: typeof(Trove.new()) = nil :: any
@@ -44,9 +44,9 @@ function CombatController.Init()
 	ControllerTrove = Trove.new()
 	LocalEventBus = EventBus.new()
 
-	local SkillsFolder = Shared:FindFirstChild("Data") and Shared.Data:FindFirstChild("Skills")
-	if SkillsFolder then
-		SkillRegistry.LoadFolder(SkillsFolder)
+	local ActionsFolder = Shared:FindFirstChild("Data") and Shared.Data:FindFirstChild("Actions")
+	if ActionsFolder then
+		ActionRegistry.LoadFolder(ActionsFolder)
 	end
 
 	local ToolsFolder = Shared:FindFirstChild("Data") and Shared.Data:FindFirstChild("Tools")
@@ -56,16 +56,16 @@ function CombatController.Init()
 end
 
 function CombatController.Start()
-	ControllerTrove:Connect(Packets.SkillRejected.OnClientEvent :: any, function(SkillId: string, Reason: string)
-		CombatController.OnSkillRejected(SkillId, Reason)
+	ControllerTrove:Connect(Packets.ActionRejected.OnClientEvent :: any, function(ActionId: string, Reason: string)
+		CombatController.OnActionRejected(ActionId, Reason)
 	end)
 
-	ControllerTrove:Connect(Packets.SkillSync.OnClientEvent :: any, function(SkillId: string, Branch: string, Canceled: boolean)
-		CombatController.OnSkillSync(SkillId, Branch, Canceled)
+	ControllerTrove:Connect(Packets.ActionSync.OnClientEvent :: any, function(ActionId: string, Branch: string, Canceled: boolean)
+		CombatController.OnActionSync(ActionId, Branch, Canceled)
 	end)
 
-	ControllerTrove:Connect(Packets.CooldownStarted.OnClientEvent :: any, function(SkillId: string, Duration: number)
-		CombatController.OnCooldownStarted(SkillId, Duration)
+	ControllerTrove:Connect(Packets.CooldownStarted.OnClientEvent :: any, function(ActionId: string, Duration: number)
+		CombatController.OnCooldownStarted(ActionId, Duration)
 	end)
 
 	ControllerTrove:Connect(Packets.HitConfirmed.OnClientEvent :: any, function(Attacker: Instance?, Target: Instance?, Damage: number, Position: Vector3, AttackType: string)
@@ -80,16 +80,16 @@ function CombatController.Stop()
 	ActiveContext = nil
 end
 
-function CombatController.IsOnCooldown(SkillId: string): boolean
-	local CooldownEnd = Cooldowns[SkillId]
+function CombatController.IsOnCooldown(ActionId: string): boolean
+	local CooldownEnd = Cooldowns[ActionId]
 	if not CooldownEnd then
 		return false
 	end
 	return tick() < CooldownEnd
 end
 
-function CombatController.CanActivate(SkillId: string): (boolean, string?)
-	if CombatController.IsOnCooldown(SkillId) then
+function CombatController.CanActivate(ActionId: string): (boolean, string?)
+	if CombatController.IsOnCooldown(ActionId) then
 		return false, "OnCooldown"
 	end
 
@@ -104,20 +104,20 @@ function CombatController.CanActivate(SkillId: string): (boolean, string?)
 	end
 
 	if ActiveContext then
-		return false, "SkillActive"
+		return false, "ActionActive"
 	end
 
-	local SkillDef = SkillRegistry.Get(SkillId)
-	if not SkillDef then
-		return false, "UnknownSkill"
+	local ActionDef = ActionRegistry.Get(ActionId)
+	if not ActionDef then
+		return false, "UnknownAction"
 	end
 
-	if SkillDef.Conditions then
-		if SkillDef.Conditions.OnAir == false then
+	if ActionDef.Conditions then
+		if ActionDef.Conditions.OnAir == false then
 			if Humanoid.FloorMaterial == Enum.Material.Air then
 				return false, "NotGrounded"
 			end
-		elseif SkillDef.Conditions.OnAir == true then
+		elseif ActionDef.Conditions.OnAir == true then
 			if Humanoid.FloorMaterial ~= Enum.Material.Air then
 				return false, "NotAirborne"
 			end
@@ -127,14 +127,14 @@ function CombatController.CanActivate(SkillId: string): (boolean, string?)
 	return true, nil
 end
 
-function CombatController.ActivateSkill(SkillId: string): boolean
-    local CanUse, _Reason = CombatController.CanActivate(SkillId)
+function CombatController.ActivateAction(ActionId: string): boolean
+    local CanUse, _Reason = CombatController.CanActivate(ActionId)
     if not CanUse then
         return false
     end
 
-    local SkillDef = SkillRegistry.Get(SkillId)
-    if not SkillDef then
+    local ActionDef = ActionRegistry.Get(ActionId)
+    if not ActionDef then
         return false
     end
 
@@ -144,9 +144,9 @@ function CombatController.ActivateSkill(SkillId: string): boolean
         return false
     end
 
-    local Tool = ToolRegistry.GetBySkillId(SkillId)
+    local Tool = ToolRegistry.GetByActionId(ActionId)
     if Tool and Tool.Cooldown then
-        Cooldowns[SkillId] = tick() + Tool.Cooldown
+        Cooldowns[ActionId] = tick() + Tool.Cooldown
     end
 
     local Entity: ExecutionEntity = {
@@ -156,55 +156,55 @@ function CombatController.ActivateSkill(SkillId: string): boolean
         Player = LocalPlayer,
     }
 
-    Packets.SkillActivate:Fire(SkillId, tick())
+    Packets.ActionActivate:Fire(ActionId, tick())
 
 	task.spawn(function()
-		local Context = SkillExecutor.CreateContext(Entity, SkillDef, LocalEventBus)
+		local Context = ActionExecutor.CreateContext(Entity, ActionDef, LocalEventBus)
 		ActiveContext = Context
 
-		CombatController.SkillActivated:Fire(SkillId)
+		CombatController.ActionActivated:Fire(ActionId)
 
-		SkillExecutor.Run(Context)
+		ActionExecutor.Run(Context)
 
 		local WasCanceled = Context.Canceled
 		ActiveContext = nil
 
 		if WasCanceled then
-			CombatController.SkillCanceled:Fire(SkillId)
+			CombatController.ActionCanceled:Fire(ActionId)
 		else
-			CombatController.SkillCompleted:Fire(SkillId)
+			CombatController.ActionCompleted:Fire(ActionId)
 		end
 	end)
 
 	return true
 end
 
-function CombatController.CancelSkill()
+function CombatController.CancelAction()
 	if ActiveContext then
-		local SkillId = ActiveContext.SkillDefinition.SkillId
-		SkillExecutor.Cancel(ActiveContext)
-		Packets.SkillCancel:Fire(SkillId)
+		local ActionId = ActiveContext.ActionDefinition.ActionId
+		ActionExecutor.Cancel(ActiveContext)
+		Packets.ActionCancel:Fire(ActionId)
 	end
 end
 
-function CombatController.OnSkillRejected(SkillId: string, Reason: string)
-	if ActiveContext and ActiveContext.SkillDefinition.SkillId == SkillId then
-		SkillExecutor.Cancel(ActiveContext)
+function CombatController.OnActionRejected(ActionId: string, Reason: string)
+	if ActiveContext and ActiveContext.ActionDefinition.ActionId == ActionId then
+		ActionExecutor.Cancel(ActiveContext)
 	end
 
-	CombatController.SkillRejected:Fire(SkillId, Reason)
+	CombatController.ActionRejected:Fire(ActionId, Reason)
 end
 
-function CombatController.OnSkillSync(SkillId: string, _Branch: string, Canceled: boolean)
+function CombatController.OnActionSync(ActionId: string, _Branch: string, Canceled: boolean)
 	if Canceled and ActiveContext then
-		if ActiveContext.SkillDefinition.SkillId == SkillId then
-			SkillExecutor.Cancel(ActiveContext)
+		if ActiveContext.ActionDefinition.ActionId == ActionId then
+			ActionExecutor.Cancel(ActiveContext)
 		end
 	end
 end
 
-function CombatController.OnCooldownStarted(SkillId: string, Duration: number)
-	Cooldowns[SkillId] = tick() + Duration
+function CombatController.OnCooldownStarted(ActionId: string, Duration: number)
+	Cooldowns[ActionId] = tick() + Duration
 end
 
 function CombatController.OnHitConfirmed(Attacker: Instance?, Target: Instance?, Damage: number, Position: Vector3, AttackType: string)
@@ -221,13 +221,13 @@ function CombatController.OnHitConfirmed(Attacker: Instance?, Target: Instance?,
 	LocalEventBus:Publish(Enums.Combat.Hitbox.Hit, HitData)
 end
 
-function CombatController.IsSkillActive(): boolean
+function CombatController.IsActionActive(): boolean
 	return ActiveContext ~= nil
 end
 
-function CombatController.GetActiveSkillId(): string?
+function CombatController.GetActiveActionId(): string?
 	if ActiveContext then
-		return ActiveContext.SkillDefinition.SkillId
+		return ActiveContext.ActionDefinition.ActionId
 	end
 	return nil
 end
