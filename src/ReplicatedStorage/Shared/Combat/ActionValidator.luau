@@ -11,7 +11,7 @@ type ActionConditions = CombatTypes.ActionConditions
 
 local ActionValidator = {}
 
-local GROUND_CHECK_DISTANCE = 3.5
+local GROUND_CHECK_DISTANCE = 5
 local GROUND_CHECK_OFFSET = Vector3.new(0, 0.5, 0)
 
 local GroundRayParams = RaycastParams.new()
@@ -29,6 +29,7 @@ local function IsGrounded(Character: Model): boolean
 	local Direction = Vector3.new(0, -GROUND_CHECK_DISTANCE, 0)
 
 	local Result = workspace:Raycast(Origin, Direction, GroundRayParams)
+
 	return Result ~= nil
 end
 

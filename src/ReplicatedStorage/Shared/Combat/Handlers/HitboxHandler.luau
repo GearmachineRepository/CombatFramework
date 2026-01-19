@@ -6,6 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Enums = require(Shared.Enums)
 local CombatTypes = require(Shared.Types.CombatTypes)
+local Packets = require(Shared.Network.Packets)
 
 type Block = CombatTypes.Block
 type ExecutionContext = CombatTypes.ExecutionContext
@@ -195,6 +196,19 @@ function HitboxHandler.Execute(Block: Block, Context: ExecutionContext): Handler
 	local Size = Vector3.new(SizeX, SizeY, SizeZ)
 	local Origin = RootPart.CFrame * CFrame.new(Offset)
 
+	local Box = Instance.new("Part")
+	Box.Size = Size
+	Box.CFrame = Origin
+	Box.Material = Enum.Material.SmoothPlastic
+	Box.Color = Color3.fromRGB(255, 0, 0)
+	Box.Transparency = 0.5
+	Box.CastShadow = false
+	Box.CanQuery = false
+	Box.CanCollide = false
+	Box.Anchored = true
+	Box.Parent = workspace
+	game.Debris:AddItem(Box, 1)
+
 	local Targets = DetectTargets(Origin, Size, Character)
 
 	if #Targets == 0 then
@@ -204,8 +218,6 @@ function HitboxHandler.Execute(Block: Block, Context: ExecutionContext): Handler
 		})
 		return nil
 	end
-
-	local Packets = require(Shared.Network.Packets)
 
 	for _, Target in Targets do
 		local TargetHumanoid = Target:FindFirstChildOfClass("Humanoid")
