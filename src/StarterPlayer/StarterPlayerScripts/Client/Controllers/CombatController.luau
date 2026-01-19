@@ -17,6 +17,7 @@ local Combat = require(Shared.Combat)
 local ActionExecutor = Combat.ActionExecutor
 local ActionRegistry = Combat.ActionRegistry
 local ActionValidator = require(Shared.Combat.ActionValidator)
+local InputController = require(script.Parent.InputController)
 
 type ExecutionEntity = CombatTypes.ExecutionEntity
 type ExecutionContext = CombatTypes.ExecutionContext
@@ -26,7 +27,7 @@ local LocalPlayer = Players.LocalPlayer :: Player
 
 local CombatController = {}
 
-CombatController.Dependencies = {}
+CombatController.Dependencies = { "InputController" }
 
 CombatController.ActionStarted = Signal.new()
 CombatController.ActionEnded = Signal.new()
@@ -86,6 +87,24 @@ function CombatController.Start()
 	)
 		CombatController.OnGrabSync(EventType, AttackerCharacter :: Model, TargetCharacter :: Model, AttackerAnimation, TargetAnimation)
 	end))
+
+	InputController.BindAction("Attack", function(State)
+		if State ~= Enum.UserInputState.Begin then
+			return
+		end
+
+		local Character = LocalPlayer.Character
+		if not Character then
+			return
+		end
+
+		local IsGrabbing = Character:GetAttribute("State_Grabbing")
+		if not IsGrabbing then
+			return
+		end
+
+		Packets.GrabInput:Fire("Throw")
+	end, Enum.UserInputType.MouseButton1)
 end
 
 function CombatController.Stop()

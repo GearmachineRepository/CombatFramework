@@ -1,11 +1,14 @@
 --!strict
 
-export type ExecutionMode = "Authoritative" | "Predictive"
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Shared = ReplicatedStorage:WaitForChild("Shared")
 
-export type EventBus = {
-	Publish: (self: EventBus, EventName: string, Data: any) -> (),
-	Subscribe: (self: EventBus, EventName: string, Callback: (Data: any) -> ()) -> () -> (),
-}
+local EnsembleTypes = require(Shared.Types.EnsembleTypes)
+
+export type EventBus = EnsembleTypes.EventBus
+export type Connection = EnsembleTypes.Connection
+
+export type ExecutionMode = "Predictive" | "Authoritative"
 
 export type ExecutionEntity = {
 	Character: Model,
@@ -24,12 +27,20 @@ export type WaitBlock = {
 	Time: number?,
 }
 
+export type WaitForMarkerBlock = {
+	BlockType: string,
+	Marker: string,
+	AnimationId: string?,
+	FallbackTime: number?,
+	Speed: number?,
+}
+
 export type AnimationBlock = {
 	BlockType: string,
 	AnimationId: string,
 	Speed: number?,
 	Loop: boolean?,
-	LastHit: number?,
+	Priority: Enum.AnimationPriority?,
 }
 
 export type SoundBlock = {
@@ -37,7 +48,6 @@ export type SoundBlock = {
 	SoundId: string,
 	Volume: number?,
 	Speed: number?,
-	LastHit: number?,
 }
 
 export type VelocityBlock = {
@@ -59,23 +69,39 @@ export type HitboxBlock = {
 	SizeX: number?,
 	SizeY: number?,
 	SizeZ: number?,
-	Damage: number?,
 	Stun: number?,
+	Damage: number?,
 	AttackType: string?,
 	Blockable: boolean?,
 	Block360: boolean?,
 	BlockDamage: number?,
 	CancelEnemy: boolean?,
-	KnockbackX: number?,
-	KnockbackY: number?,
-	KnockbackZ: number?,
+	Unblockable: boolean?,
 	LaunchY: number?,
 	LaunchZ: number?,
+	KnockbackY: number?,
+	KnockbackZ: number?,
 	GroundBounce: boolean?,
-	WallBounce: boolean?,
-	RagdollBypass: boolean?,
-	Unblockable: boolean?,
 	JuggleDecay: number?,
+}
+
+export type GrabBlock = {
+	BlockType: string,
+	X: number?,
+	Y: number?,
+	Z: number?,
+	SizeX: number?,
+	SizeY: number?,
+	SizeZ: number?,
+	HoldOffsetX: number?,
+	HoldOffsetY: number?,
+	HoldOffsetZ: number?,
+	Duration: number?,
+	AttackerAnimation: string?,
+	TargetAnimation: string?,
+	ThrowBranch: string?,
+	ReleaseBranch: string?,
+	MissBranch: string?,
 }
 
 export type HitCancelBlock = {
@@ -84,14 +110,6 @@ export type HitCancelBlock = {
 	Flip: boolean?,
 	Endlag: number?,
 	Branch: string?,
-}
-
-export type ActionBlock = {
-	BlockType: string,
-	ActionId: string,
-	Speed: number?,
-	CancelLast: boolean?,
-	HoldFor: number?,
 }
 
 export type ChaseBlock = {
@@ -104,23 +122,16 @@ export type ChaseBlock = {
 	RequiresTarget: boolean?,
 }
 
-export type GrabBlock = {
+export type ActionBlock = {
 	BlockType: string,
-	Range: number?,
-	Duration: number?,
-	OffsetX: number?,
-	OffsetY: number?,
-	OffsetZ: number?,
-	AttackerAnimation: string?,
-	TargetAnimation: string?,
-	ThrowBranch: string?,
-	ReleaseBranch: string?,
-	MissBranch: string?,
+	ActionId: string,
+	Speed: number?,
+	CancelLast: boolean?,
+	HoldFor: number?,
 }
 
 export type AddResourceBlock = {
 	BlockType: string,
-	Resource: string?,
 	Amount: number?,
 }
 
@@ -130,9 +141,7 @@ export type ActionConditions = {
 	IsStunned: boolean?,
 	IsBlocking: boolean?,
 	IsGrabbed: boolean?,
-	HasEvasive: boolean?,
-	MinHealth: number?,
-	MaxHealth: number?,
+	HasEvasive: number?,
 }
 
 export type ActionProperties = {
@@ -156,8 +165,6 @@ export type ActionDefinition = {
 	Conditions: ActionConditions?,
 	Properties: ActionProperties?,
 	Cooldown: number?,
-	GroundOnly: boolean?,
-	AirOnly: boolean?,
 }
 
 export type ToolDefinition = {
@@ -167,14 +174,18 @@ export type ToolDefinition = {
 	DefaultSlot: number,
 	Cooldown: number,
 	ActionId: string,
-	GroundOnly: boolean?,
-	RequiresTarget: boolean?,
 }
 
 export type HitRecord = {
 	Target: Model,
 	Timestamp: number,
 	Damage: number,
+}
+
+export type Trove = {
+	Add: (self: Trove, Item: any, CleanupMethod: string?) -> any,
+	Clean: (self: Trove) -> (),
+	Destroy: (self: Trove) -> (),
 }
 
 export type ExecutionContext = {
@@ -188,6 +199,7 @@ export type ExecutionContext = {
 	HitRecords: { HitRecord },
 	LastHitTarget: Model?,
 	GrabTarget: Model?,
+	Trove: Trove,
 
 	GetElapsedTime: () -> number,
 	Cancel: () -> (),
@@ -196,6 +208,10 @@ export type ExecutionContext = {
 	GetLastHitTarget: () -> Model?,
 	SetGrabTarget: (Target: Model?) -> (),
 	GetGrabTarget: () -> Model?,
+	SetCurrentAnimation: (AnimationId: string, Track: AnimationTrack?, Speed: number?) -> (),
+	GetCurrentAnimationId: () -> string?,
+	GetCurrentAnimationSpeed: () -> number,
+	GetCurrentAnimationTrack: () -> AnimationTrack?,
 }
 
 export type HandlerResult = {
@@ -231,6 +247,19 @@ export type GrabData = {
 	Duration: number,
 	AttackerAnimation: string?,
 	TargetAnimation: string?,
+}
+
+export type MarkerData = {
+	Time: number,
+	Value: string?,
+}
+
+export type AnimationData = {
+	Length: number,
+	Markers: { [string]: MarkerData },
+	PrimaryName: string?,
+	Names: { [string]: true },
+	AnimationId: string,
 }
 
 return nil

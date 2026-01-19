@@ -7,6 +7,7 @@ local Packages = require(Shared.Packages)
 local CombatTypes = require(Shared.Types.CombatTypes)
 
 local TableUtil = Packages.TableUtil
+local Trove = Packages.Trove
 
 type ExecutionEntity = CombatTypes.ExecutionEntity
 type ActionDefinition = CombatTypes.ActionDefinition
@@ -44,12 +45,19 @@ function ExecutionContextModule.Create(
 	local GrabTarget: Model? = nil
 	local Canceled = false
 
+	local CurrentAnimationId: string? = nil
+	local CurrentAnimationSpeed: number = 1
+	local CurrentAnimationTrack: AnimationTrack? = nil
+
+	local ContextTrove = Trove.new()
+
 	local function GetElapsedTime(): number
 		return tick() - StartTime
 	end
 
 	local function Cancel()
 		Canceled = true
+		ContextTrove:Clean()
 	end
 
 	local function RecordHit(Target: Model, Damage: number)
@@ -84,6 +92,24 @@ function ExecutionContextModule.Create(
 		return GrabTarget
 	end
 
+	local function SetCurrentAnimation(AnimationId: string, Track: AnimationTrack?, Speed: number?)
+		CurrentAnimationId = AnimationId
+		CurrentAnimationTrack = Track
+		CurrentAnimationSpeed = Speed or 1
+	end
+
+	local function GetCurrentAnimationId(): string?
+		return CurrentAnimationId
+	end
+
+	local function GetCurrentAnimationSpeed(): number
+		return CurrentAnimationSpeed
+	end
+
+	local function GetCurrentAnimationTrack(): AnimationTrack?
+		return CurrentAnimationTrack
+	end
+
 	local Context: ExecutionContext = {
 		Entity = Entity,
 		ActionDefinition = ActionDefinition,
@@ -95,6 +121,7 @@ function ExecutionContextModule.Create(
 		HitRecords = HitRecords,
 		LastHitTarget = LastHitTarget,
 		GrabTarget = GrabTarget,
+		Trove = ContextTrove,
 
 		GetElapsedTime = GetElapsedTime,
 		Cancel = Cancel,
@@ -103,6 +130,10 @@ function ExecutionContextModule.Create(
 		GetLastHitTarget = GetLastHitTarget,
 		SetGrabTarget = SetGrabTarget,
 		GetGrabTarget = GetGrabTarget,
+		SetCurrentAnimation = SetCurrentAnimation,
+		GetCurrentAnimationId = GetCurrentAnimationId,
+		GetCurrentAnimationSpeed = GetCurrentAnimationSpeed,
+		GetCurrentAnimationTrack = GetCurrentAnimationTrack,
 	}
 
 	return setmetatable({}, {
@@ -115,6 +146,8 @@ function ExecutionContextModule.Create(
 				return LastHitTarget :: any
 			elseif Key == "GrabTarget" then
 				return GrabTarget :: any
+			elseif Key == "Trove" then
+				return ContextTrove :: any
 			else
 				return (Context :: any)[Key]
 			end

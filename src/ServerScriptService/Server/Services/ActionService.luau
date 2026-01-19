@@ -172,7 +172,7 @@ function ActionService.OnActionRequested(Player: Player, ActionId: string, Times
 
 	local CanUse, Reason = ActionService.CanActivate(Player, ActionId)
 
-	print(ActionId, Reason)
+	--print(ActionId, Reason)
 
 	if not CanUse then
 		Packets.ActionRejected:FireClient(Player, ActionId, Reason or "Unknown")

@@ -6,6 +6,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Enums = require(Shared.Enums)
 local CombatTypes = require(Shared.Types.CombatTypes)
 local ExecutionContextModule = require(script.Parent.ExecutionContext)
+local AnimationTimingCache = require(Shared.Combat.AnimationTimingCache)
 
 type ExecutionEntity = CombatTypes.ExecutionEntity
 type ActionDefinition = CombatTypes.ActionDefinition
@@ -24,14 +25,7 @@ local PREDICTABLE_BLOCKS: { [string]: boolean } = {
 	Sound = true,
 	Velocity = true,
 	Wait = true,
-}
-
-local SERVER_ONLY_BLOCKS: { [string]: boolean } = {
-	Hitbox = true,
-	HitCancel = true,
-	Grab = true,
-	AddHealth = true,
-	AddEvasive = true,
+	WaitForMarker = true,
 }
 
 local function GetHandlers(): any
@@ -77,6 +71,8 @@ function ActionExecutor.Run(Context: ExecutionContext)
 
 	local EntryBranch = ActionExecutor.GetEntryBranch(ActionDefinition)
 	ActionExecutor.RunBranch(EntryBranch, Context)
+
+	Context.Trove:Clean()
 
 	if Mode == "Authoritative" then
 		if Context.Canceled then
@@ -143,6 +139,23 @@ function ActionExecutor.RunBranch(BranchData: Branch, Context: ExecutionContext)
 		if not ShouldRunBlock(BlockType, Context.Mode) then
 			if BlockType == "Wait" then
 				task.wait(Block.Time or 0)
+			elseif BlockType == "WaitForMarker" then
+				local AnimationId = Block.AnimationId or Context.GetCurrentAnimationId()
+				local Speed = Block.Speed or Context.GetCurrentAnimationSpeed() or 1
+
+				if AnimationId then
+					local MarkerTime = AnimationTimingCache.GetMarkerTime(AnimationId, Block.Marker, Speed)
+					if MarkerTime then
+						local WaitDuration = MarkerTime - Context.GetElapsedTime()
+						if WaitDuration > 0 then
+							task.wait(WaitDuration)
+						end
+					elseif Block.FallbackTime then
+						task.wait(Block.FallbackTime / Speed)
+					end
+				elseif Block.FallbackTime then
+					task.wait(Block.FallbackTime / Speed)
+				end
 			end
 			continue
 		end
@@ -208,14 +221,6 @@ function ActionExecutor.Cancel(Context: ExecutionContext)
 	if Context and not Context.Canceled then
 		Context.Cancel()
 	end
-end
-
-function ActionExecutor.IsPredictableBlock(BlockType: string): boolean
-	return PREDICTABLE_BLOCKS[BlockType] == true
-end
-
-function ActionExecutor.IsServerOnlyBlock(BlockType: string): boolean
-	return SERVER_ONLY_BLOCKS[BlockType] == true
 end
 
 return ActionExecutor

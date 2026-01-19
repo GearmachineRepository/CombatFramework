@@ -27,101 +27,144 @@ local function SetStateOnCharacter(Character: Model, StateName: string, Value: b
 	Character:SetAttribute(AttributeName, Value)
 end
 
-local function FindGrabTarget(Character: Model, Range: number): Model?
+local function DetectTargets(Origin: CFrame, Size: Vector3, Exclude: Model): { Model }
+	local Results: { Model } = {}
+
 	if not CharactersFolder then
 		CharactersFolder = workspace:FindFirstChild("Characters")
 		if not CharactersFolder then
-			return nil
+			return Results
 		end
 	end
 
+	local OverlapParams = OverlapParams.new()
+	OverlapParams.FilterType = Enum.RaycastFilterType.Include
+	OverlapParams.FilterDescendantsInstances = { CharactersFolder }
+
+	local Parts = workspace:GetPartBoundsInBox(Origin, Size, OverlapParams)
+
+	for _, Part in Parts do
+		if Part.Name ~= "HumanoidRootPart" then
+			continue
+		end
+
+		local Character = Part.Parent :: Model
+		if Character == Exclude then
+			continue
+		end
+
+		if not Character:FindFirstChildOfClass("Humanoid") then
+			continue
+		end
+
+		if table.find(Results, Character) then
+			continue
+		end
+
+		table.insert(Results, Character)
+	end
+
+	return Results
+end
+
+local function FindGrabTarget(
+	Character: Model,
+	OffsetX: number,
+	OffsetY: number,
+	OffsetZ: number,
+	SizeX: number,
+	SizeY: number,
+	SizeZ: number
+): Model?
 	local RootPart = Character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if not RootPart then
 		return nil
 	end
 
-	local LookVector = RootPart.CFrame.LookVector
-	local NearestTarget: Model? = nil
-	local BestScore = -math.huge
+	local Offset = Vector3.new(OffsetX, OffsetY, -OffsetZ)
+	local Size = Vector3.new(SizeX, SizeY, SizeZ)
+	local Origin = RootPart.CFrame * CFrame.new(Offset)
 
-	for _, Child in CharactersFolder:GetChildren() do
-		if Child == Character then
-			continue
-		end
+	local Box = Instance.new("Part")
+	Box.Size = Size
+	Box.CFrame = Origin
+	Box.Material = Enum.Material.SmoothPlastic
+	Box.Color = Color3.fromRGB(255, 0, 0)
+	Box.Transparency = 0.5
+	Box.CastShadow = false
+	Box.CanQuery = false
+	Box.CanCollide = false
+	Box.Anchored = true
+	Box.Parent = workspace
+	game.Debris:AddItem(Box, 1)
 
-		if not Child:IsA("Model") then
-			continue
-		end
+	local Targets = DetectTargets(Origin, Size, Character)
 
-		local TargetHumanoid = Child:FindFirstChildOfClass("Humanoid")
+	for _, Target in Targets do
+		local TargetHumanoid = Target:FindFirstChildOfClass("Humanoid")
 		if not TargetHumanoid or TargetHumanoid.Health <= 0 then
 			continue
 		end
 
-		local TargetRoot = Child:FindFirstChild("HumanoidRootPart") :: BasePart?
-		if not TargetRoot then
-			continue
-		end
-
-		local ToTarget = (TargetRoot.Position - RootPart.Position)
-		local Distance = ToTarget.Magnitude
-
-		if Distance > Range then
-			continue
-		end
-
-		local Blocked = GetStateFromCharacter(Child, "Blocking")
+		local Blocked = GetStateFromCharacter(Target, "Blocking")
 		if Blocked then
 			continue
 		end
 
-		local Grabbed = GetStateFromCharacter(Child, "Grabbed")
+		local Grabbed = GetStateFromCharacter(Target, "Grabbed")
 		if Grabbed then
 			continue
 		end
 
-		local Invincible = GetStateFromCharacter(Child, "Invincible")
+		local Invincible = GetStateFromCharacter(Target, "Invincible")
 		if Invincible then
 			continue
 		end
 
-		local DirectionScore = LookVector:Dot(ToTarget.Unit)
-		local DistanceScore = 1 - (Distance / Range)
-		local Score = DirectionScore * 0.7 + DistanceScore * 0.3
-
-		if Score > BestScore then
-			BestScore = Score
-			NearestTarget = Child
-		end
+		return Target
 	end
 
-	if BestScore < 0.3 then
-		return nil
-	end
-
-	return NearestTarget
+	return nil
 end
 
-local function PositionGrabbedTarget(
+local function CreateGrabWeld(
 	AttackerCharacter: Model,
 	TargetCharacter: Model,
-	OffsetX: number,
-	OffsetY: number,
-	OffsetZ: number
-)
+	HoldOffsetX: number,
+	HoldOffsetY: number,
+	HoldOffsetZ: number
+): WeldConstraint?
 	local AttackerRoot = AttackerCharacter:FindFirstChild("HumanoidRootPart") :: BasePart?
 	local TargetRoot = TargetCharacter:FindFirstChild("HumanoidRootPart") :: BasePart?
 
 	if not AttackerRoot or not TargetRoot then
+		return nil
+	end
+
+	local Offset = Vector3.new(HoldOffsetX, HoldOffsetY, HoldOffsetZ)
+	local TargetPosition = AttackerRoot.CFrame * CFrame.new(Offset)
+	local LookAt = CFrame.lookAt(TargetPosition.Position, AttackerRoot.Position)
+	TargetRoot.CFrame = LookAt
+
+	local Weld = Instance.new("WeldConstraint")
+	Weld.Name = "GrabWeld"
+	Weld.Part0 = AttackerRoot
+	Weld.Part1 = TargetRoot
+	Weld.Parent = AttackerRoot
+
+	return Weld
+end
+
+local function DestroyGrabWeld(AttackerCharacter: Model)
+	local AttackerRoot = AttackerCharacter:FindFirstChild("HumanoidRootPart")
+	if not AttackerRoot then
 		return
 	end
 
-	local Offset = Vector3.new(OffsetX, OffsetY, OffsetZ)
-	local TargetPosition = AttackerRoot.CFrame * CFrame.new(Offset)
-
-	local LookAt = CFrame.lookAt(TargetPosition.Position, AttackerRoot.Position)
-
-	TargetRoot.CFrame = LookAt
+	local Weld = AttackerRoot:FindFirstChild("GrabWeld")
+	if Weld then
+		Weld:Destroy()
+	end
 end
 
 function GrabHandler.Execute(Block: Block, Context: ExecutionContext): HandlerResult?
@@ -133,11 +176,18 @@ function GrabHandler.Execute(Block: Block, Context: ExecutionContext): HandlerRe
 		return nil
 	end
 
-	local Range = Block.Range or 5
+	local OffsetX = Block.X or 0
+	local OffsetY = Block.Y or 0
+	local OffsetZ = Block.Z or 4
+	local SizeX = Block.SizeX or 4
+	local SizeY = Block.SizeY or 4
+	local SizeZ = Block.SizeZ or 4
+
+	local HoldOffsetX = Block.HoldOffsetX or 0
+	local HoldOffsetY = Block.HoldOffsetY or 0
+	local HoldOffsetZ = Block.HoldOffsetZ or -3
+
 	local Duration = Block.Duration or 2
-	local OffsetX = Block.OffsetX or 0
-	local OffsetY = Block.OffsetY or 0
-	local OffsetZ = Block.OffsetZ or -3
 	local AttackerAnimation = Block.AttackerAnimation
 	local TargetAnimation = Block.TargetAnimation
 	local ThrowBranch = Block.ThrowBranch
@@ -147,7 +197,7 @@ function GrabHandler.Execute(Block: Block, Context: ExecutionContext): HandlerRe
 	local Character = Context.Entity.Character
 	local Player = Context.Entity.Player
 
-	local Target = FindGrabTarget(Character, Range)
+	local Target = FindGrabTarget(Character, OffsetX, OffsetY, OffsetZ, SizeX, SizeY, SizeZ)
 
 	if not Target then
 		if MissBranch then
@@ -179,30 +229,13 @@ function GrabHandler.Execute(Block: Block, Context: ExecutionContext): HandlerRe
 
 	Packets.GrabSync:Fire("GrabStarted", Character, Target, AttackerAnimation, TargetAnimation)
 
-	local PositionConnection: RBXScriptConnection? = nil
-	PositionConnection = RunService.Heartbeat:Connect(function()
-		if not Target or not Target.Parent then
-			if PositionConnection then
-				PositionConnection:Disconnect()
-			end
-			return
-		end
-
-		if not GetStateFromCharacter(Target, "Grabbed") then
-			if PositionConnection then
-				PositionConnection:Disconnect()
-			end
-			return
-		end
-
-		PositionGrabbedTarget(Character, Target, OffsetX, OffsetY, OffsetZ)
-	end)
+	local GrabWeld = CreateGrabWeld(Character, Target, HoldOffsetX, HoldOffsetY, HoldOffsetZ)
 
 	local ThrowInput = false
 	local GrabEnded = false
 	local StartTime = tick()
 
-	local InputConnection: RBXScriptConnection? = nil
+	local InputConnection: any = nil
 	if Player and ThrowBranch then
 		InputConnection = Packets.GrabInput.OnServerEvent:Connect(function(InputPlayer: Player, InputType: string)
 			if InputPlayer ~= Player then
@@ -239,16 +272,19 @@ function GrabHandler.Execute(Block: Block, Context: ExecutionContext): HandlerRe
 			break
 		end
 
-		task.wait(0.05)
-	end
+		if not GrabWeld or not GrabWeld.Parent then
+			GrabEnded = true
+			break
+		end
 
-	if PositionConnection then
-		PositionConnection:Disconnect()
+		task.wait(0.05)
 	end
 
 	if InputConnection then
 		InputConnection:Disconnect()
 	end
+
+	DestroyGrabWeld(Character)
 
 	if Target and Target.Parent then
 		SetStateOnCharacter(Target, "Grabbed", false)

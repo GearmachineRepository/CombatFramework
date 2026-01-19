@@ -116,15 +116,15 @@ function ChaseHandler.Execute(Block: Block, Context: ExecutionContext): HandlerR
 	local TargetCFrame = TargetRoot.CFrame * CFrame.new(Offset)
 
 	local LookAt = CFrame.lookAt(TargetCFrame.Position, TargetRoot.Position)
-	local FinalCFrame = CFrame.new(LookAt.Position) * CFrame.Angles(LookAt:ToEulerAnglesYXZ())
+	local FinalCFrame = CFrame.new(LookAt.Position) * CFrame.Angles(0, select(2, LookAt:ToEulerAnglesYXZ()), 0)
 
 	local Humanoid = Character:FindFirstChildOfClass("Humanoid")
 	if Humanoid then
 		Humanoid.AutoRotate = false
 	end
 
-	local TweenInfo = TweenInfo.new(Time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-	local Tween = TweenService:Create(RootPart, TweenInfo, { CFrame = FinalCFrame })
+	local TweenData = TweenInfo.new(Time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local Tween = TweenService:Create(RootPart, TweenData, { CFrame = FinalCFrame })
 
 	local Completed = false
 

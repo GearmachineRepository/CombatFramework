@@ -5,6 +5,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local CombatTypes = require(Shared.Types.CombatTypes)
+local Packets = require(Shared.Network.Packets)
+local AnimationTimingCache = require(Shared.Combat.AnimationTimingCache)
 
 type Block = CombatTypes.Block
 type ExecutionContext = CombatTypes.ExecutionContext
@@ -12,26 +14,74 @@ type HandlerResult = CombatTypes.HandlerResult
 
 local IsServer = RunService:IsServer()
 
-local ANIMATION_MAX_DURATION = 5
-local MIN_VALID_ASSET_ID = 1000000
-
 local AnimationHandler = {}
 
-local function IsValidAnimationId(AnimationId: string): boolean
-	if not AnimationId or AnimationId == "" then
-		return false
+local VFX_PREFIX = "VFX_"
+local SFX_PREFIX = "SFX_"
+
+local function GetAnimator(Character: Model): Animator?
+	local Humanoid = Character:FindFirstChildOfClass("Humanoid")
+	if not Humanoid then
+		return nil
 	end
 
-	local AssetId = tonumber(string.match(AnimationId, "%d+"))
-	if not AssetId then
-		return false
+	local Animator = Humanoid:FindFirstChildOfClass("Animator")
+	if not Animator then
+		local NewAnimator = Instance.new("Animator")
+		NewAnimator.Parent = Humanoid
+		Animator = NewAnimator
 	end
 
-	if AssetId < MIN_VALID_ASSET_ID then
-		return false
+	return Animator
+end
+
+local function SetupMarkerListeners(
+	AnimationTrack: AnimationTrack,
+	Character: Model,
+	Context: ExecutionContext
+)
+	local Animation = AnimationTrack.Animation
+	if not Animation then
+		return
 	end
 
-	return true
+	local Markers = AnimationTimingCache.GetAllMarkers(Animation.AnimationId)
+
+	if not Markers then
+		return
+	end
+
+	for MarkerName, _MarkerData in Markers do
+		if string.sub(MarkerName, 1, #VFX_PREFIX) == VFX_PREFIX then
+			local EffectName = string.sub(MarkerName, #VFX_PREFIX + 1)
+
+			Context.Trove:Add(AnimationTrack:GetMarkerReachedSignal(MarkerName):Connect(function(Value: string)
+				local RootPart = Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+				local Position = if RootPart then RootPart.Position else Vector3.zero
+				local EffectParams = if Value ~= "" then Value else "VFX"
+				Packets.PlayVFX:Fire(EffectName, Character, Position, 0, EffectParams)
+			end))
+
+		elseif string.sub(MarkerName, 1, #SFX_PREFIX) == SFX_PREFIX then
+			local SoundName = string.sub(MarkerName, #SFX_PREFIX + 1)
+
+			Context.Trove:Add(AnimationTrack:GetMarkerReachedSignal(MarkerName):Connect(function(Value: string)
+				local SoundId = if Value ~= "" then Value else nil
+				local RootPart = Character:FindFirstChild("HumanoidRootPart")
+				if RootPart and SoundId then
+					local Sound = Instance.new("Sound")
+					Sound.Name = SoundName
+					Sound.SoundId = SoundId
+					Sound.Volume = 0.8
+					Sound.Parent = RootPart
+					Sound:Play()
+					Sound.Ended:Once(function()
+						Sound:Destroy()
+					end)
+				end
+			end))
+		end
+	end
 end
 
 function AnimationHandler.Execute(Block: Block, Context: ExecutionContext): HandlerResult?
@@ -44,31 +94,17 @@ function AnimationHandler.Execute(Block: Block, Context: ExecutionContext): Hand
 	end
 
 	local AnimationId = Block.AnimationId
-	if not IsValidAnimationId(AnimationId) then
-		return nil
-	end
-
 	local Speed = Block.Speed or 1
 	local Loop = Block.Loop or false
-	local LastHit = Block.LastHit or -1
+	local Priority = Block.Priority or Enum.AnimationPriority.Action
 
-	local Target: Model
-	if LastHit >= 0 then
-		local LastHitTarget = Context.GetLastHitTarget()
-		if not LastHitTarget then
-			return nil
-		end
-		Target = LastHitTarget
-	else
-		Target = Context.Entity.Character
-	end
-
-	local Humanoid = Target:FindFirstChildOfClass("Humanoid")
-	if not Humanoid then
+	if not AnimationId or AnimationId == "" then
 		return nil
 	end
 
-	local Animator = Humanoid:FindFirstChildOfClass("Animator")
+	local Character = Context.Entity.Character
+	local Animator = GetAnimator(Character)
+
 	if not Animator then
 		return nil
 	end
@@ -76,43 +112,21 @@ function AnimationHandler.Execute(Block: Block, Context: ExecutionContext): Hand
 	local Animation = Instance.new("Animation")
 	Animation.AnimationId = AnimationId
 
-	local Track = Animator:LoadAnimation(Animation)
-	Track.Looped = Loop
-	Track:Play()
-	Track:AdjustSpeed(Speed)
+	local AnimationTrack = Animator:LoadAnimation(Animation)
+	AnimationTrack.Priority = Priority
+	AnimationTrack.Looped = Loop
+	AnimationTrack:Play()
+	AnimationTrack:AdjustSpeed(Speed)
 
-	if not Loop then
-		if Track.Length == 0 then
-			task.wait()
+	Context.SetCurrentAnimation(AnimationId, AnimationTrack)
+
+	SetupMarkerListeners(AnimationTrack, Character, Context)
+
+	Context.Trove:Add(function()
+		if AnimationTrack.IsPlaying then
+			AnimationTrack:Stop(0.1)
 		end
-
-		local Duration = math.min(Track.Length / Speed, ANIMATION_MAX_DURATION)
-
-		if Duration > 0 then
-			local Completed = false
-
-			local Connection = Track.Stopped:Once(function()
-				Completed = true
-			end)
-
-			local StartTime = tick()
-			while not Completed and (tick() - StartTime) < Duration do
-				if Context.Canceled then
-					Track:Stop()
-					break
-				end
-				task.wait()
-			end
-
-			if Connection.Connected then
-				Connection:Disconnect()
-			end
-
-			if not Completed then
-				Track:Stop()
-			end
-		end
-	end
+	end)
 
 	Animation:Destroy()
 
