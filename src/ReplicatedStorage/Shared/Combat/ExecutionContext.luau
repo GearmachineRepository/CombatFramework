@@ -13,6 +13,7 @@ type ActionDefinition = CombatTypes.ActionDefinition
 type ActionProperties = CombatTypes.ActionProperties
 type HitRecord = CombatTypes.HitRecord
 type ExecutionContext = CombatTypes.ExecutionContext
+type ExecutionMode = CombatTypes.ExecutionMode
 type EventBus = CombatTypes.EventBus
 
 local ExecutionContextModule = {}
@@ -21,12 +22,15 @@ local DEFAULT_PROPERTIES: ActionProperties = table.freeze({
 	DamageMultiplier = 1,
 	KnockbackMultiplier = 1,
 	Invincible = false,
+	SuperArmor = false,
+	CanCancel = true,
 })
 
 function ExecutionContextModule.Create(
 	Entity: ExecutionEntity,
 	ActionDefinition: ActionDefinition,
-	EventBus: any
+	EventBus: any,
+	Mode: ExecutionMode
 ): ExecutionContext
 	local StartTime = tick()
 
@@ -37,6 +41,7 @@ function ExecutionContextModule.Create(
 
 	local HitRecords: { HitRecord } = {}
 	local LastHitTarget: Model? = nil
+	local GrabTarget: Model? = nil
 	local Canceled = false
 
 	local function GetElapsedTime(): number
@@ -71,21 +76,33 @@ function ExecutionContextModule.Create(
 		return LastHitTarget
 	end
 
+	local function SetGrabTarget(Target: Model?)
+		GrabTarget = Target
+	end
+
+	local function GetGrabTarget(): Model?
+		return GrabTarget
+	end
+
 	local Context: ExecutionContext = {
 		Entity = Entity,
 		ActionDefinition = ActionDefinition,
 		EventBus = EventBus,
+		Mode = Mode,
 		StartTime = StartTime,
 		Canceled = Canceled,
 		Properties = Properties,
 		HitRecords = HitRecords,
 		LastHitTarget = LastHitTarget,
+		GrabTarget = GrabTarget,
 
 		GetElapsedTime = GetElapsedTime,
 		Cancel = Cancel,
 		RecordHit = RecordHit,
 		HadHitInWindow = HadHitInWindow,
 		GetLastHitTarget = GetLastHitTarget,
+		SetGrabTarget = SetGrabTarget,
+		GetGrabTarget = GetGrabTarget,
 	}
 
 	return setmetatable({}, {
@@ -96,6 +113,8 @@ function ExecutionContextModule.Create(
 				return HitRecords :: any
 			elseif Key == "LastHitTarget" then
 				return LastHitTarget :: any
+			elseif Key == "GrabTarget" then
+				return GrabTarget :: any
 			else
 				return (Context :: any)[Key]
 			end
@@ -103,6 +122,8 @@ function ExecutionContextModule.Create(
 		__newindex = function(_, Key, Value)
 			if Key == "Canceled" then
 				Canceled = Value
+			elseif Key == "GrabTarget" then
+				GrabTarget = Value :: any
 			end
 		end,
 	}) :: any

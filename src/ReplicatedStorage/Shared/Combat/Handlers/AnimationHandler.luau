@@ -39,6 +39,10 @@ function AnimationHandler.Execute(Block: Block, Context: ExecutionContext): Hand
 		return nil
 	end
 
+	if Context.Mode ~= "Predictive" then
+		return nil
+	end
+
 	local AnimationId = Block.AnimationId
 	if not IsValidAnimationId(AnimationId) then
 		return nil

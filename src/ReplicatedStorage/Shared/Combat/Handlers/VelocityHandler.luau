@@ -1,5 +1,6 @@
 --!strict
 
+local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -9,9 +10,19 @@ type Block = CombatTypes.Block
 type ExecutionContext = CombatTypes.ExecutionContext
 type HandlerResult = CombatTypes.HandlerResult
 
+local IsServer = RunService:IsServer()
+
 local VelocityHandler = {}
 
 function VelocityHandler.Execute(Block: Block, Context: ExecutionContext): HandlerResult?
+	if IsServer then
+		return nil
+	end
+
+	if Context.Mode ~= "Predictive" then
+		return nil
+	end
+
 	local VelocityX = Block.X or 0
 	local VelocityY = Block.Y or 0
 	local VelocityZ = Block.Z or 0

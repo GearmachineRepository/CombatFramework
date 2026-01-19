@@ -1,5 +1,7 @@
 --!strict
 
+local Types = require(script.Parent.Parent.Parent.Types.CombatTypes)
+
 return {
 	ActionId = "DivergentFist",
 	DisplayName = "Divergent Fist",
@@ -35,4 +37,4 @@ return {
 		KnockbackMultiplier = 1,
 		Invincible = false,
 	},
-}
+} :: Types.ActionDefinition

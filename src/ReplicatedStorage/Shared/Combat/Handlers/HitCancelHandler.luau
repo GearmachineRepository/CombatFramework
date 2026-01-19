@@ -1,5 +1,6 @@
 --!strict
 
+local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -9,9 +10,19 @@ type Block = CombatTypes.Block
 type ExecutionContext = CombatTypes.ExecutionContext
 type HandlerResult = CombatTypes.HandlerResult
 
+local IsServer = RunService:IsServer()
+
 local HitCancelHandler = {}
 
 function HitCancelHandler.Execute(Block: Block, Context: ExecutionContext): HandlerResult?
+	if not IsServer then
+		return nil
+	end
+
+	if Context.Mode ~= "Authoritative" then
+		return nil
+	end
+
 	local TimeWindow = Block.Time or 1
 	local Flip = Block.Flip or false
 	local Endlag = Block.Endlag or 0

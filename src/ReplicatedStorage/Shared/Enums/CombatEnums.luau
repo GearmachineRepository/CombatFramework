@@ -9,19 +9,19 @@ return table.freeze({
 		Hitbox = "Hitbox",
 		HitCancel = "HitCancel",
 		Action = "Action",
-		Connect = "Connect",
-		AddAwakening = "AddAwakening",
+		Chase = "Chase",
+		Grab = "Grab",
 		AddHealth = "AddHealth",
 		AddEvasive = "AddEvasive",
-		Branch = "Branch",
 	}),
 
 	AttackType = table.freeze({
 		Melee = "Melee",
-		Bullet = "Bullet",
-		Explosion = "Explosion",
-		Swarm = "Swarm",
-		Domain = "Domain",
+		Heavy = "Heavy",
+		Projectile = "Projectile",
+		Grab = "Grab",
+		Launch = "Launch",
+		Slam = "Slam",
 	}),
 
 	Action = table.freeze({
@@ -40,8 +40,19 @@ return table.freeze({
 		Blocked = "Combat.Hitbox.Blocked",
 	}),
 
-	Connect = table.freeze({
-		SignalSent = "Combat.Connect.SignalSent",
-		SignalReceived = "Combat.Connect.SignalReceived",
+	Grab = table.freeze({
+		Started = "Combat.Grab.Started",
+		Ended = "Combat.Grab.Ended",
+		Escaped = "Combat.Grab.Escaped",
+		Thrown = "Combat.Grab.Thrown",
+	}),
+
+	State = table.freeze({
+		Stunned = "Stunned",
+		Blocking = "Blocking",
+		Grabbed = "Grabbed",
+		Grabbing = "Grabbing",
+		Invincible = "Invincible",
+		SuperArmor = "SuperArmor",
 	}),
 })

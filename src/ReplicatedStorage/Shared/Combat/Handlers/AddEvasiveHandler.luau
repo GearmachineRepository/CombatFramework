@@ -12,9 +12,11 @@ type HandlerResult = CombatTypes.HandlerResult
 
 local IsServer = RunService:IsServer()
 
-local AddHealthHandler = {}
+local EVASIVE_CAP = 50
 
-function AddHealthHandler.Execute(Block: Block, Context: ExecutionContext): HandlerResult?
+local AddEvasiveHandler = {}
+
+function AddEvasiveHandler.Execute(Block: Block, Context: ExecutionContext): HandlerResult?
 	if not IsServer then
 		return nil
 	end
@@ -25,21 +27,17 @@ function AddHealthHandler.Execute(Block: Block, Context: ExecutionContext): Hand
 
 	local Amount = Block.Amount or 5
 
-	local Humanoid = Context.Entity.Humanoid
-	if not Humanoid then
+	local Character = Context.Entity.Character
+	if not Character then
 		return nil
 	end
 
-	local HealthChange = Humanoid.MaxHealth * (Amount / 100)
+	local CurrentEvasive = Character:GetAttribute("Stat_Evasive") or 0
+	local NewEvasive = math.clamp(CurrentEvasive + Amount, 0, EVASIVE_CAP)
 
-	if HealthChange > 0 then
-		Humanoid.Health = math.min(Humanoid.Health + HealthChange, Humanoid.MaxHealth)
-	elseif HealthChange < 0 then
-		local NewHealth = Humanoid.Health + HealthChange
-		Humanoid.Health = math.max(NewHealth, 1)
-	end
+	Character:SetAttribute("Stat_Evasive", NewEvasive)
 
 	return nil
 end
 
-return AddHealthHandler
+return AddEvasiveHandler

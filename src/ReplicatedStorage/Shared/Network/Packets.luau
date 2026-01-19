@@ -101,6 +101,15 @@ return {
 		Packet.Any
 	),
 
+	PlayVFX = Packet(
+		"PlayVFX",
+		Packet.String,
+		Packet.Instance,
+		Packet.Vector3F32,
+		Packet.NumberF32,
+		Packet.String
+	),
+
 	PlayMusic = Packet(
 		"PlayMusic",
 		Packet.String,
@@ -143,64 +152,84 @@ return {
 		Packet.Any
 	),
 
-
-    ActionActivate = Packet(
-        "ActionActivate",
-        Packet.String,
-        Packet.NumberF64
-    ),
-
-    ActionCancel = Packet(
-        "ActionCancel",
-        Packet.String
-    ),
-
-    ActionRejected = Packet(
-        "ActionRejected",
-        Packet.String,
-        Packet.String
-    ),
-
-    ActionSync = Packet(
-        "ActionSync",
-        Packet.String,
-        Packet.String,
-        Packet.Boolean8
-    ),
-
-	HitCandidates = Packet(
-		"HitCandidates",
-		Packet.String,      -- ActionId
-		Packet.String,      -- TargetName
-		Packet.NumberF32,   -- Damage
-		Packet.NumberF32,   -- Stun
-		Packet.String,      -- AttackType
-		Packet.Boolean8,    -- Blockable
-		Packet.Boolean8,    -- Block360
-		Packet.Boolean8,    -- CancelEnemy
-		Packet.NumberF64    -- Timestamp
+ 	ActionActivate = Packet(
+		"ActionActivate",
+		Packet.String,
+		Packet.NumberF64
 	),
 
-    HitConfirmed = Packet(
-        "HitConfirmed",
-        Packet.Instance,
-        Packet.Instance,
-        Packet.NumberF32,
-        Packet.Vector3F32,
-        Packet.String
-    ),
+	ActionCancel = Packet(
+		"ActionCancel",
+		Packet.String
+	),
 
-    CooldownStarted = Packet(
-        "CooldownStarted",
-        Packet.String,
-        Packet.NumberF32
-    ),
+	ActionRejected = Packet(
+		"ActionRejected",
+		Packet.String,
+		Packet.String
+	),
 
-    ConnectSignal = Packet(
-        "ConnectSignal",
-        Packet.String,
-        Packet.Vector3F32,
-        Packet.NumberF32,
-        Packet.NumberF32
-    ),
+	ActionEnded = Packet(
+		"ActionEnded",
+		Packet.String,
+		Packet.String
+	),
+
+	BranchSync = Packet(
+		"BranchSync",
+		Packet.String,
+		Packet.String
+	),
+
+	HitConfirmed = Packet(
+		"HitConfirmed",
+		Packet.Instance,
+		Packet.Instance,
+		Packet.NumberF32,
+		Packet.Vector3F32,
+		Packet.String
+	),
+
+	GrabSync = Packet(
+		"GrabSync",
+		Packet.String,
+		Packet.Instance,
+		Packet.Instance,
+		Packet.Any,
+		Packet.Any
+	),
+
+	GrabInput = Packet(
+		"GrabInput",
+		Packet.String
+	),
+
+	CooldownStarted = Packet(
+		"CooldownStarted",
+		Packet.String,
+		Packet.NumberF32
+	),
+
+
+	HotbarActivate = Packet(
+		"HotbarActivate",
+		Packet.NumberU8
+	),
+
+	HotbarAssign = Packet(
+		"HotbarAssign",
+		Packet.NumberU8,
+		Packet.Any
+	),
+
+	HotbarSync = Packet(
+		"HotbarSync",
+		Packet.Any
+	),
+
+	HotbarSlotUpdated = Packet(
+		"HotbarSlotUpdated",
+		Packet.NumberU8,
+		Packet.Any
+	),
 }

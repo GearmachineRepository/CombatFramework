@@ -1,12 +1,11 @@
 --!strict
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+export type ExecutionMode = "Authoritative" | "Predictive"
 
-local EnsembleTypes = require(Shared.Types.EnsembleTypes)
-
-export type EventBus = EnsembleTypes.EventBus
-export type Connection = EnsembleTypes.Connection
+export type EventBus = {
+	Publish: (self: EventBus, EventName: string, Data: any) -> (),
+	Subscribe: (self: EventBus, EventName: string, Callback: (Data: any) -> ()) -> () -> (),
+}
 
 export type ExecutionEntity = {
 	Character: Model,
@@ -38,6 +37,7 @@ export type SoundBlock = {
 	SoundId: string,
 	Volume: number?,
 	Speed: number?,
+	LastHit: number?,
 }
 
 export type VelocityBlock = {
@@ -49,8 +49,6 @@ export type VelocityBlock = {
 	Fade: boolean?,
 	Track: boolean?,
 	LastHit: number?,
-	Ragdoll: number?,
-	TrueRagdoll: boolean?,
 }
 
 export type HitboxBlock = {
@@ -61,12 +59,23 @@ export type HitboxBlock = {
 	SizeX: number?,
 	SizeY: number?,
 	SizeZ: number?,
-	Stun: number?,
 	Damage: number?,
+	Stun: number?,
 	AttackType: string?,
 	Blockable: boolean?,
 	Block360: boolean?,
+	BlockDamage: number?,
 	CancelEnemy: boolean?,
+	KnockbackX: number?,
+	KnockbackY: number?,
+	KnockbackZ: number?,
+	LaunchY: number?,
+	LaunchZ: number?,
+	GroundBounce: boolean?,
+	WallBounce: boolean?,
+	RagdollBypass: boolean?,
+	Unblockable: boolean?,
+	JuggleDecay: number?,
 }
 
 export type HitCancelBlock = {
@@ -85,30 +94,53 @@ export type ActionBlock = {
 	HoldFor: number?,
 }
 
-export type ConnectBlock = {
+export type ChaseBlock = {
 	BlockType: string,
-	Signal: string?,
-	Time: number?,
 	Range: number?,
+	Time: number?,
+	OffsetX: number?,
+	OffsetY: number?,
+	OffsetZ: number?,
+	RequiresTarget: boolean?,
+}
+
+export type GrabBlock = {
+	BlockType: string,
+	Range: number?,
+	Duration: number?,
+	OffsetX: number?,
+	OffsetY: number?,
+	OffsetZ: number?,
+	AttackerAnimation: string?,
+	TargetAnimation: string?,
+	ThrowBranch: string?,
+	ReleaseBranch: string?,
+	MissBranch: string?,
 }
 
 export type AddResourceBlock = {
 	BlockType: string,
+	Resource: string?,
 	Amount: number?,
 }
 
 export type ActionConditions = {
 	OnAir: boolean?,
 	HasTarget: boolean?,
-	IsAwakened: boolean?,
-	HasAwkBar: number?,
-	Durability: number?,
+	IsStunned: boolean?,
+	IsBlocking: boolean?,
+	IsGrabbed: boolean?,
+	HasEvasive: boolean?,
+	MinHealth: number?,
+	MaxHealth: number?,
 }
 
 export type ActionProperties = {
 	DamageMultiplier: number?,
 	KnockbackMultiplier: number?,
 	Invincible: boolean?,
+	SuperArmor: boolean?,
+	CanCancel: boolean?,
 }
 
 export type Branch = {
@@ -123,6 +155,9 @@ export type ActionDefinition = {
 	Branches: { [string]: Branch }?,
 	Conditions: ActionConditions?,
 	Properties: ActionProperties?,
+	Cooldown: number?,
+	GroundOnly: boolean?,
+	AirOnly: boolean?,
 }
 
 export type ToolDefinition = {
@@ -134,7 +169,6 @@ export type ToolDefinition = {
 	ActionId: string,
 	GroundOnly: boolean?,
 	RequiresTarget: boolean?,
-	AwakeningOnly: boolean?,
 }
 
 export type HitRecord = {
@@ -147,22 +181,27 @@ export type ExecutionContext = {
 	Entity: ExecutionEntity,
 	ActionDefinition: ActionDefinition,
 	EventBus: EventBus,
+	Mode: ExecutionMode,
 	StartTime: number,
 	Canceled: boolean,
 	Properties: ActionProperties,
 	HitRecords: { HitRecord },
 	LastHitTarget: Model?,
+	GrabTarget: Model?,
 
 	GetElapsedTime: () -> number,
 	Cancel: () -> (),
 	RecordHit: (Target: Model, Damage: number) -> (),
 	HadHitInWindow: (WindowSeconds: number) -> boolean,
 	GetLastHitTarget: () -> Model?,
+	SetGrabTarget: (Target: Model?) -> (),
+	GetGrabTarget: () -> Model?,
 }
 
 export type HandlerResult = {
 	JumpToBranch: string?,
 	Cancel: boolean?,
+	WaitForInput: string?,
 }
 
 export type BlockHandler = {
@@ -179,6 +218,19 @@ export type HitData = {
 	Block360: boolean?,
 	CancelEnemy: boolean?,
 	Position: Vector3,
+	LaunchY: number?,
+	LaunchZ: number?,
+	KnockbackY: number?,
+	KnockbackZ: number?,
+	GroundBounce: boolean?,
+}
+
+export type GrabData = {
+	Attacker: ExecutionEntity,
+	Target: Model,
+	Duration: number,
+	AttackerAnimation: string?,
+	TargetAnimation: string?,
 }
 
 return nil
