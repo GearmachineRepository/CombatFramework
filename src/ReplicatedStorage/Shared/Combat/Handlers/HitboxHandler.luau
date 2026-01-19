@@ -19,7 +19,7 @@ local HitboxHandler = {}
 local CharactersFolder = workspace:FindFirstChild("Characters")
 
 local DEFAULT_JUGGLE_DECAY = 0.85
-local GROUND_CHECK_DISTANCE = 3.5
+local GROUND_CHECK_DISTANCE = 4
 
 local GroundRayParams = RaycastParams.new()
 GroundRayParams.FilterType = Enum.RaycastFilterType.Exclude

@@ -11,7 +11,7 @@ type ActionConditions = CombatTypes.ActionConditions
 
 local ActionValidator = {}
 
-local GROUND_CHECK_DISTANCE = 5
+local GROUND_CHECK_DISTANCE = 4
 local GROUND_CHECK_OFFSET = Vector3.new(0, 0.5, 0)
 
 local GroundRayParams = RaycastParams.new()
