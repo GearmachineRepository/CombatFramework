@@ -12,7 +12,16 @@ local EntityService = require(script.Parent.EntityService)
 
 local PlayerService = {}
 
-local PlayerTroves: { [Player]: typeof(Trove.new()) } = {}
+PlayerService.Dependencies = { "EntityService" }
+
+type PlayerTroves = {
+	[Player]: typeof(Trove.new()),
+}
+
+type Trove = typeof(Trove.new())
+
+local ServiceTrove: Trove = nil :: any
+local PlayerTroves: PlayerTroves = {}
 
 local function OnCharacterAdded(Player: Player, Character: Model)
 	if EntityService.GetEntity(Character) then
@@ -25,7 +34,7 @@ local function OnCharacterAdded(Player: Player, Character: Model)
 		return
 	end
 
-	EntityService.CreateEntity(Character, {
+	EntityService.CreateEntityWithArchetype(Character, "Player", {
 		Player = Player,
 	})
 end
@@ -61,16 +70,33 @@ local function OnPlayerRemoving(Player: Player)
 	end
 end
 
+function PlayerService.Init()
+	ServiceTrove = Trove.new()
+end
+
 function PlayerService.Start()
 	for _, Player in Players:GetPlayers() do
 		task.spawn(OnPlayerAdded, Player)
 	end
 
-	Players.PlayerAdded:Connect(OnPlayerAdded)
-	Players.PlayerRemoving:Connect(OnPlayerRemoving)
+	ServiceTrove:Connect(Players.PlayerAdded, OnPlayerAdded)
+	ServiceTrove:Connect(Players.PlayerRemoving, OnPlayerRemoving)
 end
 
-function PlayerService.GetTrove(Player: Player): typeof(Trove.new())?
+function PlayerService.Stop()
+	ServiceTrove:Destroy()
+
+	for Player, PlayerTrove in pairs(PlayerTroves) do
+		if not PlayerTrove then
+			continue
+		end
+
+		PlayerTroves[Player]:Destroy()
+		PlayerTroves[Player] = nil
+	end
+end
+
+function PlayerService.GetTrove(Player: Player): Trove?
 	return PlayerTroves[Player]
 end
 

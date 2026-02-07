@@ -9,7 +9,12 @@ return {
 		ScreenShakeEnabled = true,
 	},
 
-	Inventory = {},
+	Inventory = {
+		Backpack = {},
+		Hotbar = {},
+		Bank = {},
+	},
+
 	Currency = 0,
 	Stats = {},
 }

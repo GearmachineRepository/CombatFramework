@@ -151,4 +151,61 @@ return {
 		Packet.Boolean8,
 		Packet.Any
 	),
+
+	-- Client → Server: Request to transfer/merge a slot
+	InventoryTransfer = Packet(
+		"InventoryTransfer",
+		Packet.String,   -- SourceInventory
+		Packet.NumberU8, -- SourceIndex
+		Packet.String,   -- TargetInventory
+		Packet.NumberU8  -- TargetIndex
+	),
+
+	-- Client → Server: Request to swap slots (no merge)
+	InventorySwap = Packet(
+		"InventorySwap",
+		Packet.String,   -- SourceInventory
+		Packet.NumberU8, -- SourceIndex
+		Packet.String,   -- TargetInventory
+		Packet.NumberU8  -- TargetIndex
+	),
+
+	-- Client → Server: Request to drop an item
+	InventoryDrop = Packet(
+		"InventoryDrop",
+		Packet.String,   -- InventoryName
+		Packet.NumberU8, -- SlotIndex
+		Packet.NumberU8  -- Quantity (0 = all)
+	),
+
+	-- Server → Client: Full inventory sync
+	InventorySync = Packet(
+		"InventorySync",
+		Packet.String, -- InventoryName
+		Packet.Any     -- Inventory data (table of slots)
+	),
+
+	-- Server → Client: Single slot update
+	InventorySlotUpdate = Packet(
+		"InventorySlotUpdate",
+		Packet.String,   -- InventoryName
+		Packet.NumberU8, -- SlotIndex
+		Packet.Any       -- ItemStack or nil
+	),
+
+	-- Server → Client: Item added notification
+	InventoryItemAdded = Packet(
+		"InventoryItemAdded",
+		Packet.String,   -- InventoryName
+		Packet.String,   -- ItemId
+		Packet.NumberU16 -- Quantity
+	),
+
+	-- Server → Client: Item removed notification
+	InventoryItemRemoved = Packet(
+		"InventoryItemRemoved",
+		Packet.String,   -- InventoryName
+		Packet.String,   -- ItemId
+		Packet.NumberU16 -- Quantity
+	),
 }

@@ -13,10 +13,13 @@ local Packets = require(Shared.Network.Packets)
 local Trove = Packages.Trove
 local TableUtil = Packages.TableUtil
 
+local PlayerDataService = require(Server.Services.PlayerDataService)
+
 local DataBridgeService = {}
 
-local ServiceTrove = Trove.new()
-local PlayerDataService: any = nil
+DataBridgeService.Dependencies = { "PlayerDataService" }
+
+local ServiceTrove: typeof(Trove.new()) = nil :: any
 
 local ALLOWED_KEYS: { [string]: boolean } = {
 	Inventory = true,
@@ -50,13 +53,13 @@ local function CheckRateLimit(Player: Player): boolean
 end
 
 function DataBridgeService.Init()
-	PlayerDataService = require(Server.Services.PlayerDataService)
+	ServiceTrove = Trove.new()
 end
 
 function DataBridgeService.Start()
-	ServiceTrove:Add(Players.PlayerRemoving:Connect(function(Player: Player)
+	ServiceTrove:Connect(Players.PlayerRemoving, function(Player: Player)
 		RequestCounts[Player] = nil
-	end))
+	end)
 
 	ServiceTrove:Add(Packets.FetchData.OnServerEvent:Connect(function(Player: Player, RequestId: any, Key: any)
 		if typeof(RequestId) ~= "string" or typeof(Key) ~= "string" then
@@ -92,6 +95,11 @@ function DataBridgeService.Start()
 
 		Packets.DataResponse:FireClient(Player, RequestId, true, SafeValue)
 	end))
+end
+
+function DataBridgeService.Stop()
+	ServiceTrove:Destroy()
+	table.clear(RequestCounts)
 end
 
 function DataBridgeService.AddAllowedKey(Key: string)

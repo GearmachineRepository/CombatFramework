@@ -13,11 +13,11 @@ local HookLoader = require(Server.HookUtil.HookLoader)
 HookLoader.Configure(Server.Hooks)
 
 Ensemble.Init({
-    Components = Server.Components,
-    Archetypes = {
-        Player = { "Stats", "States", "Modifiers", "Inventory" },
-        Enemy = { "Stats", "States", "Modifiers" },
-    },
+	Components = Server.Components,
+	Archetypes = {
+		Player = { "Stats", "States", "Modifiers" },
+		Enemy = { "Stats", "States", "Modifiers" },
+	},
 })
 
 ServiceLoader.LoadServices(Server.Services)

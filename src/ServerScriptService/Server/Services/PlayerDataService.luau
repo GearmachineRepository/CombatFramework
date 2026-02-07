@@ -11,6 +11,7 @@ local Packages = require(ReplicatedStorage.Shared.Packages)
 local DataTemplate = require(Shared.Data.PlayerDataTemplate)
 
 local Signal = Packages.Signal
+local TableUtil = Packages.TableUtil
 
 local ENABLED = false
 
@@ -22,6 +23,7 @@ local PlayerDataService = {}
 
 local GameStore = if ENABLED then ProfileStore.New("PlayerData", DataTemplate) else nil
 local Profiles: { [Player]: Profile } = {}
+local MockData: { [Player]: typeof(DataTemplate) } = {}
 
 PlayerDataService.ProfileLoaded = Signal.new()
 PlayerDataService.ProfileReleased = Signal.new()
@@ -89,11 +91,26 @@ end
 
 function PlayerDataService.GetData(Player: Player): typeof(DataTemplate)?
     local Profile = Profiles[Player]
-    return if Profile then Profile.Data else nil
+    if Profile then
+        return Profile.Data
+    end
+
+    if not ENABLED then
+        if not MockData[Player] then
+            MockData[Player] = TableUtil.Copy(DataTemplate, true)
+        end
+        return MockData[Player]
+    end
+
+    return nil
 end
 
 function PlayerDataService.IsLoaded(Player: Player): boolean
     return Profiles[Player] ~= nil
 end
+
+Players.PlayerRemoving:Connect(function(Player)
+    MockData[Player] = nil
+end)
 
 return PlayerDataService
