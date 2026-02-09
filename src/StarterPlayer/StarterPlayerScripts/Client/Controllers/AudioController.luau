@@ -1,5 +1,15 @@
 --!strict
 
+--[=[
+	@class AudioController
+
+	SFX and music playback.
+
+	Manages sound groups for music and SFX, adjusts volumes based on player
+	settings, and provides methods for playing positional sounds, looping
+	music with fade transitions, and responding to server audio packets.
+]=]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
@@ -33,6 +43,9 @@ local function GetMusicVolume(): number
 	return SettingsController.GetSetting("MusicVolume") :: number
 end
 
+--[=[
+	Creates the controller Trove and initializes Music and Sfx sound groups.
+]=]
 function AudioController.Init()
 	ControllerTrove = Trove.new()
 
@@ -50,14 +63,17 @@ function AudioController.Init()
 	ControllerTrove:Add(SfxGroup)
 end
 
+--[=[
+	Subscribes to volume setting changes and server audio packets.
+]=]
 function AudioController.Start()
-	ControllerTrove:Add(SettingsController.SettingChanged:Connect(function(Key: string, Value: any)
+	ControllerTrove:Connect(SettingsController.SettingChanged :: any, function(Key: string, Value: any)
 		if Key == "MusicVolume" then
 			MusicGroup.Volume = Value :: number
 		elseif Key == "SfxVolume" then
 			SfxGroup.Volume = Value :: number
 		end
-	end))
+	end)
 
 	MusicGroup.Volume = GetMusicVolume()
 	SfxGroup.Volume = GetSfxVolume()
@@ -75,10 +91,21 @@ function AudioController.Start()
 	end)
 end
 
+--[=[
+	Destroys the controller Trove and all managed sound groups.
+]=]
 function AudioController.Stop()
 	ControllerTrove:Destroy()
 end
 
+--[=[
+	Plays a one-shot sound effect. If a Position is provided, the sound
+	is spatialized via a temporary Part. Otherwise it plays globally.
+
+	@param SoundId string -- The asset ID of the sound
+	@param Position Vector3? -- World position for 3D audio, or nil for 2D
+	@param Config SoundConfig? -- Optional volume and playback speed overrides
+]=]
 function AudioController.PlaySound(SoundId: string, Position: Vector3?, Config: SoundConfig?)
 	local Sound = Instance.new("Sound")
 	Sound.SoundId = SoundId
@@ -111,6 +138,12 @@ function AudioController.PlaySound(SoundId: string, Position: Vector3?, Config: 
 	end
 end
 
+--[=[
+	Plays looping music with a fade-in. Stops any currently playing music first.
+
+	@param SoundId string -- The asset ID of the music track
+	@param Config MusicConfig? -- Optional volume, fade time, and loop overrides
+]=]
 function AudioController.PlayMusic(SoundId: string, Config: MusicConfig?)
 	if CurrentMusic then
 		AudioController.StopMusic(0.5)
@@ -132,6 +165,11 @@ function AudioController.PlayMusic(SoundId: string, Config: MusicConfig?)
 	TweenService:Create(Sound, TweenInfo.new(FadeIn), { Volume = TargetVolume }):Play()
 end
 
+--[=[
+	Fades out and destroys the current music track.
+
+	@param FadeTime number? -- Fade duration in seconds, defaults to 1
+]=]
 function AudioController.StopMusic(FadeTime: number?)
 	if not CurrentMusic then
 		return
@@ -147,18 +185,38 @@ function AudioController.StopMusic(FadeTime: number?)
 	end)
 end
 
+--[=[
+	Directly sets the music group volume.
+
+	@param Volume number -- Volume between 0 and 1
+]=]
 function AudioController.SetMusicVolume(Volume: number)
 	MusicGroup.Volume = math.clamp(Volume, 0, 1)
 end
 
+--[=[
+	Directly sets the SFX group volume.
+
+	@param Volume number -- Volume between 0 and 1
+]=]
 function AudioController.SetSfxVolume(Volume: number)
 	SfxGroup.Volume = math.clamp(Volume, 0, 1)
 end
 
+--[=[
+	Returns the Music SoundGroup instance.
+
+	@return SoundGroup -- The music group
+]=]
 function AudioController.GetMusicGroup(): SoundGroup
 	return MusicGroup
 end
 
+--[=[
+	Returns the Sfx SoundGroup instance.
+
+	@return SoundGroup -- The SFX group
+]=]
 function AudioController.GetSfxGroup(): SoundGroup
 	return SfxGroup
 end

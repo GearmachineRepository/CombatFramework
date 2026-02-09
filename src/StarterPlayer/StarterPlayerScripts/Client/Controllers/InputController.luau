@@ -1,5 +1,16 @@
 --!strict
 
+--[=[
+	@class InputController
+
+	Keyboard, mouse, gamepad, and touch input management.
+
+	Provides an action-binding system where named actions map to input keys.
+	Actions can be bound, unbound, rebound, and toggled. Fires `ActionTriggered`
+	whenever a bound action activates, and wraps the Input package for typed
+	device access.
+]=]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -116,10 +127,16 @@ local function FireActionsForInput(InputType: Enum.KeyCode | Enum.UserInputType,
 	end
 end
 
+--[=[
+	Creates the controller Trove for connection cleanup.
+]=]
 function InputController.Init()
 	ControllerTrove = Trove.new()
 end
 
+--[=[
+	Initializes input devices and connects their signals to the action dispatch system.
+]=]
 function InputController.Start()
 	KeyboardInput = ControllerTrove:Add(Input.Keyboard.new() :: any) :: Keyboard
 	MouseInput = ControllerTrove:Add(Input.Mouse.new() :: any) :: Mouse
@@ -130,39 +147,42 @@ function InputController.Start()
 		return
 	end
 
-	ControllerTrove:Add(KeyboardInput.KeyDown:Connect(function(KeyCode: Enum.KeyCode, Processed: boolean)
+	ControllerTrove:Connect(KeyboardInput.KeyDown :: any, function(KeyCode: Enum.KeyCode, Processed: boolean)
 		FireActionsForInput(KeyCode, Enum.UserInputState.Begin, Processed)
-	end))
+	end)
 
-	ControllerTrove:Add(KeyboardInput.KeyUp:Connect(function(KeyCode: Enum.KeyCode, Processed: boolean)
+	ControllerTrove:Connect(KeyboardInput.KeyUp :: any, function(KeyCode: Enum.KeyCode, Processed: boolean)
 		FireActionsForInput(KeyCode, Enum.UserInputState.End, Processed)
-	end))
+	end)
 
-	ControllerTrove:Add(MouseInput.LeftDown:Connect(function(Processed: boolean)
+	ControllerTrove:Connect(MouseInput.LeftDown :: any, function(Processed: boolean)
 		FireActionsForInput(Enum.UserInputType.MouseButton1, Enum.UserInputState.Begin, Processed)
-	end))
+	end)
 
-	ControllerTrove:Add(MouseInput.LeftUp:Connect(function(Processed: boolean)
+	ControllerTrove:Connect(MouseInput.LeftUp :: any, function(Processed: boolean)
 		FireActionsForInput(Enum.UserInputType.MouseButton1, Enum.UserInputState.End, Processed)
-	end))
+	end)
 
-	ControllerTrove:Add(MouseInput.RightDown:Connect(function(Processed: boolean)
+	ControllerTrove:Connect(MouseInput.RightDown :: any, function(Processed: boolean)
 		FireActionsForInput(Enum.UserInputType.MouseButton2, Enum.UserInputState.Begin, Processed)
-	end))
+	end)
 
-	ControllerTrove:Add(MouseInput.RightUp:Connect(function(Processed: boolean)
+	ControllerTrove:Connect(MouseInput.RightUp :: any, function(Processed: boolean)
 		FireActionsForInput(Enum.UserInputType.MouseButton2, Enum.UserInputState.End, Processed)
-	end))
+	end)
 
-	ControllerTrove:Add(GamepadInput.ButtonDown:Connect(function(Button: Enum.KeyCode, Processed: boolean)
+	ControllerTrove:Connect(GamepadInput.ButtonDown :: any, function(Button: Enum.KeyCode, Processed: boolean)
 		FireActionsForInput(Button, Enum.UserInputState.Begin, Processed)
-	end))
+	end)
 
-	ControllerTrove:Add(GamepadInput.ButtonUp:Connect(function(Button: Enum.KeyCode, Processed: boolean)
+	ControllerTrove:Connect(GamepadInput.ButtonUp :: any, function(Button: Enum.KeyCode, Processed: boolean)
 		FireActionsForInput(Button, Enum.UserInputState.End, Processed)
-	end))
+	end)
 end
 
+--[=[
+	Destroys the controller Trove, releases input devices, and clears all action bindings.
+]=]
 function InputController.Stop()
 	ControllerTrove:Destroy()
 	KeyboardInput = nil
@@ -173,6 +193,14 @@ function InputController.Stop()
 	table.clear(InputToActions)
 end
 
+--[=[
+	Binds a named action to one or more input keys. If an action with the
+	same name already exists, it is unbound first.
+
+	@param ActionName string -- Unique name for the action
+	@param Callback (Enum.UserInputState) -> () -- Handler called on input state changes
+	@param ... Enum.KeyCode | Enum.UserInputType -- One or more inputs to bind
+]=]
 function InputController.BindAction(
 	ActionName: string,
 	Callback: (Enum.UserInputState) -> (),
@@ -195,11 +223,22 @@ function InputController.BindAction(
 	end
 end
 
+--[=[
+	Removes an action binding entirely.
+
+	@param ActionName string -- The action to unbind
+]=]
 function InputController.UnbindAction(ActionName: string)
 	UnregisterInputMapping(ActionName)
 	Actions[ActionName] = nil
 end
 
+--[=[
+	Replaces the input keys for an existing action without changing its callback.
+
+	@param ActionName string -- The action to rebind
+	@param ... Enum.KeyCode | Enum.UserInputType -- New inputs
+]=]
 function InputController.RebindAction(ActionName: string, ...: Enum.KeyCode | Enum.UserInputType)
 	local Action = Actions[ActionName]
 	if not Action then
@@ -216,6 +255,12 @@ function InputController.RebindAction(ActionName: string, ...: Enum.KeyCode | En
 	end
 end
 
+--[=[
+	Enables or disables an action without removing it.
+
+	@param ActionName string -- The action to toggle
+	@param Enabled boolean -- Whether the action should fire
+]=]
 function InputController.SetEnabled(ActionName: string, Enabled: boolean)
 	local Action = Actions[ActionName]
 	if Action then
@@ -223,11 +268,23 @@ function InputController.SetEnabled(ActionName: string, Enabled: boolean)
 	end
 end
 
+--[=[
+	Returns whether the given action is currently enabled.
+
+	@param ActionName string -- The action to check
+	@return boolean -- True if the action exists and is enabled
+]=]
 function InputController.IsEnabled(ActionName: string): boolean
 	local Action = Actions[ActionName]
 	return if Action then Action.Enabled else false
 end
 
+--[=[
+	Returns whether a keyboard key is currently held down.
+
+	@param KeyCode Enum.KeyCode -- The key to check
+	@return boolean -- True if the key is down
+]=]
 function InputController.IsKeyDown(KeyCode: Enum.KeyCode): boolean
 	if not KeyboardInput then
 		return false
@@ -235,6 +292,12 @@ function InputController.IsKeyDown(KeyCode: Enum.KeyCode): boolean
 	return KeyboardInput:IsKeyDown(KeyCode)
 end
 
+--[=[
+	Returns whether a gamepad button is currently held down.
+
+	@param Button Enum.KeyCode -- The button to check
+	@return boolean -- True if the button is down
+]=]
 function InputController.IsButtonDown(Button: Enum.KeyCode): boolean
 	if not GamepadInput then
 		return false
@@ -242,22 +305,47 @@ function InputController.IsButtonDown(Button: Enum.KeyCode): boolean
 	return GamepadInput:IsButtonDown(Button)
 end
 
+--[=[
+	Returns the Keyboard input device, or nil if not initialized.
+
+	@return Keyboard? -- The keyboard device
+]=]
 function InputController.GetKeyboard(): Keyboard?
 	return KeyboardInput
 end
 
+--[=[
+	Returns the Mouse input device, or nil if not initialized.
+
+	@return Mouse? -- The mouse device
+]=]
 function InputController.GetMouse(): Mouse?
 	return MouseInput
 end
 
+--[=[
+	Returns the Gamepad input device, or nil if not initialized.
+
+	@return Gamepad? -- The gamepad device
+]=]
 function InputController.GetGamepad(): Gamepad?
 	return GamepadInput
 end
 
+--[=[
+	Returns the Touch input device, or nil if not initialized.
+
+	@return Touch? -- The touch device
+]=]
 function InputController.GetTouch(): Touch?
 	return TouchInput
 end
 
+--[=[
+	Returns whether the current device supports touch input.
+
+	@return boolean -- True if touch is available
+]=]
 function InputController.IsTouchEnabled(): boolean
 	if not TouchInput then
 		return false

@@ -1,5 +1,15 @@
 --!strict
 
+--[=[
+	@class PlayerService
+
+	Character lifecycle and entity creation for players.
+
+	Listens for player join/leave and character spawn/despawn events,
+	creating Ensemble entities with the "Player" archetype for each
+	character. Manages per-player Trove instances for connection cleanup.
+]=]
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -14,13 +24,13 @@ local PlayerService = {}
 
 PlayerService.Dependencies = { "EntityService" }
 
+type TroveInstance = typeof(Trove.new())
+
 type PlayerTroves = {
-	[Player]: typeof(Trove.new()),
+	[Player]: TroveInstance,
 }
 
-type Trove = typeof(Trove.new())
-
-local ServiceTrove: Trove = nil :: any
+local ServiceTrove: TroveInstance = nil :: any
 local PlayerTroves: PlayerTroves = {}
 
 local function OnCharacterAdded(Player: Player, Character: Model)
@@ -70,10 +80,16 @@ local function OnPlayerRemoving(Player: Player)
 	end
 end
 
+--[=[
+	Creates the service Trove for connection cleanup.
+]=]
 function PlayerService.Init()
 	ServiceTrove = Trove.new()
 end
 
+--[=[
+	Connects to player lifecycle events and processes any players already in-game.
+]=]
 function PlayerService.Start()
 	for _, Player in Players:GetPlayers() do
 		task.spawn(OnPlayerAdded, Player)
@@ -83,6 +99,9 @@ function PlayerService.Start()
 	ServiceTrove:Connect(Players.PlayerRemoving, OnPlayerRemoving)
 end
 
+--[=[
+	Destroys the service Trove and all per-player Troves.
+]=]
 function PlayerService.Stop()
 	ServiceTrove:Destroy()
 
@@ -96,7 +115,13 @@ function PlayerService.Stop()
 	end
 end
 
-function PlayerService.GetTrove(Player: Player): Trove?
+--[=[
+	Returns the per-player Trove for the given player, or nil if they don't have one.
+
+	@param Player Player -- The player to look up
+	@return TroveInstance? -- The player's Trove, or nil
+]=]
+function PlayerService.GetTrove(Player: Player): TroveInstance?
 	return PlayerTroves[Player]
 end
 

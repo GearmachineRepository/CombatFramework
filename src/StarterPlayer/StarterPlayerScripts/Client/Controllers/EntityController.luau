@@ -1,5 +1,15 @@
 --!strict
 
+--[=[
+	@class EntityController
+
+	Client-side entity state tracking.
+
+	Listens for server replication packets to maintain a local cache of
+	entity stats and states. Fires signals when entities are added,
+	removed, or when their stats/states change.
+]=]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 
@@ -31,10 +41,17 @@ EntityController.EntityRemoved = Signal.new()
 EntityController.StatChanged = Signal.new()
 EntityController.StateChanged = Signal.new()
 
+--[=[
+	Creates the controller Trove for connection cleanup.
+]=]
 function EntityController.Init()
     ControllerTrove = Trove.new()
 end
 
+--[=[
+	Subscribes to entity replication packets from the server and tracks
+	local player character removal.
+]=]
 function EntityController.Start()
     ControllerTrove:Connect(Packets.EntitySpawned.OnClientEvent :: any, function(Character: Instance, Data: { Stats: Stats?, States: States? })
         local EntityData: EntityData = {
@@ -78,15 +95,29 @@ function EntityController.Start()
     end)
 end
 
+--[=[
+	Destroys the controller Trove and clears the entity cache.
+]=]
 function EntityController.Stop()
     ControllerTrove:Destroy()
     table.clear(Entities)
 end
 
+--[=[
+	Returns the cached entity data for a given Character instance, or nil.
+
+	@param Character Instance -- The character to look up
+	@return EntityData? -- The entity's stats and states, or nil
+]=]
 function EntityController.GetEntity(Character: Instance): EntityData?
     return Entities[Character]
 end
 
+--[=[
+	Returns the cached entity data for the local player's current character, or nil.
+
+	@return EntityData? -- The local entity data, or nil
+]=]
 function EntityController.GetLocalEntity(): EntityData?
     local Character = LocalPlayer.Character
     if not Character then
@@ -95,20 +126,32 @@ function EntityController.GetLocalEntity(): EntityData?
     return Entities[Character]
 end
 
-function EntityController.GetStat(StatName: string): number?
+--[=[
+	Returns the current value of a stat on the local player's entity.
+
+	@param StatName string -- The stat to look up
+	@return number -- The stat value, or 0 if not found
+]=]
+function EntityController.GetLocalStat(StatName: string): number
     local EntityData = EntityController.GetLocalEntity()
     if not EntityData then
-        return nil
+        return 0
     end
-    return EntityData.Stats[StatName]
+    return EntityData.Stats[StatName] or 0
 end
 
-function EntityController.GetState(StateName: string): boolean?
+--[=[
+	Returns the current value of a state on the local player's entity.
+
+	@param StateName string -- The state to look up
+	@return boolean -- The state value, or false if not found
+]=]
+function EntityController.GetLocalState(StateName: string): boolean
     local EntityData = EntityController.GetLocalEntity()
     if not EntityData then
-        return nil
+        return false
     end
-    return EntityData.States[StateName]
+    return EntityData.States[StateName] or false
 end
 
 return EntityController

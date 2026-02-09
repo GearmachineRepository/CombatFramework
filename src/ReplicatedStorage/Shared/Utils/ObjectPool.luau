@@ -1,15 +1,14 @@
 --!strict
 
---[[
-	ObjectPool
+--[=[
+	@class ObjectPool
 
 	A generic object pool for reusing instances (or other destroyable objects) to reduce allocations
 	and improve runtime performance.
 
-	This pool tracks "active" (checked out) objects to protect against:
-	- double-return
-	- returning foreign objects (not created by this pool)
-	- delayed returns after Clear()
+	This pool tracks "active" (checked out) objects to protect against
+	double-return, returning foreign objects (not created by this pool),
+	and delayed returns after Clear().
 
 	Behavioral notes:
 	- MaxSize caps the number of *available (idle)* objects retained, not total objects created.
@@ -20,8 +19,6 @@
 		- If DestroyUntrackedReturns is false, the return is a no-op.
 	- Returning an object after Destroy() destroys that object deterministically.
 	- Reset errors are handled according to ResetErrorMode. On reset failure, the object is destroyed and not retained.
-
-	Example:
 
 	```lua
 	local ObjectPool = require(path.to.ObjectPool)
@@ -48,7 +45,7 @@
 
 	Pool:Return(Part)
 	```
-]]
+]=]
 
 export type ResetErrorMode = "Warn" | "Error" | "Silent"
 
@@ -78,7 +75,7 @@ local DEFAULT_MAX_SIZE = 100
 local DEFAULT_DESTROY_UNTRACKED_RETURNS = true
 local DEFAULT_RESET_ERROR_MODE: ResetErrorMode = "Warn"
 
---[[
+--[=[
 	Destroys or disconnects common Roblox resources.
 
 	Supported cleanup targets:
@@ -87,7 +84,9 @@ local DEFAULT_RESET_ERROR_MODE: ResetErrorMode = "Warn"
 	- Table with a Destroy function field: Destroy(CleanupValue)
 
 	If CleanupValue is none of the above, this is a no-op.
-]]
+
+	@param CleanupValue unknown -- The resource to clean up
+]=]
 local function Cleanup(CleanupValue: unknown)
 	if CleanupValue == nil then
 		return
@@ -139,23 +138,10 @@ type PoolInternal<T> = {
 local PoolMetatable = {}
 PoolMetatable.__index = PoolMetatable
 
---[[
-	Destroys an object using Cleanup().
-
-	This is intentionally generic to support Instances, connections, and destroyable tables.
-]]
 local function DestroyObject<T>(Object: T)
 	Cleanup(Object :: any)
 end
 
---[[
-	Handles a Reset failure by destroying the object and applying ResetErrorMode.
-
-	ResetErrorMode:
-	- Silent: suppress all output
-	- Warn: warn(...)
-	- Error: error(...)
-]]
 local function HandleResetFailure<T>(Self: PoolInternal<T>, Object: T, ResetErrorMessage: string)
 	DestroyObject(Object)
 
@@ -171,12 +157,6 @@ local function HandleResetFailure<T>(Self: PoolInternal<T>, Object: T, ResetErro
 	error(ResetErrorMessage, 3)
 end
 
---[[
-	Attempts to run ResetFunction safely.
-
-	Returns true on success.
-	On failure, the object is destroyed and false is returned.
-]]
 local function TryReset<T>(Self: PoolInternal<T>, Object: T): boolean
 	local Ok, ResetError = pcall(function()
 		Self.ResetFunction(Object)
@@ -192,13 +172,14 @@ local function TryReset<T>(Self: PoolInternal<T>, Object: T): boolean
 	return false
 end
 
---[[
+--[=[
 	Checks out an object from the pool.
 
 	If an idle object is available, it is reused. Otherwise, a new object is created.
-
 	Errors if the pool has been destroyed.
-]]
+
+	@return T -- The checked-out object
+]=]
 function PoolMetatable.Get<T>(Self: PoolInternal<T>): T
 	if Self.IsDestroyed then
 		error("ObjectPool is destroyed", 2)
@@ -215,20 +196,18 @@ function PoolMetatable.Get<T>(Self: PoolInternal<T>): T
 	return Object
 end
 
---[[
+--[=[
 	Returns an object to the pool.
 
 	If the pool has been destroyed, the object is destroyed deterministically.
+	If the object is not currently tracked as active (foreign, double-return, delayed return after Clear()),
+	it is either destroyed or ignored based on DestroyUntrackedReturns.
 
-	If the object is not currently tracked as active (foreign, double-return, delayed return after Clear()):
-	- If DestroyUntrackedReturns is true, the object is destroyed.
-	- If DestroyUntrackedReturns is false, this is a no-op.
+	On a successful return, ResetFunction is invoked. If ResetFunction fails, the object
+	is destroyed and not retained. If the available pool is at capacity, the object is destroyed.
 
-	On a successful return, ResetFunction is invoked.
-	If ResetFunction fails, the object is destroyed and not retained.
-
-	If the available pool is at capacity (MaxSize), the object is destroyed instead of retained.
-]]
+	@param Object T -- The object to return
+]=]
 function PoolMetatable.Return<T>(Self: PoolInternal<T>, Object: T)
 	if Self.IsDestroyed then
 		DestroyObject(Object)
@@ -256,18 +235,15 @@ function PoolMetatable.Return<T>(Self: PoolInternal<T>, Object: T)
 	end
 end
 
---[[
+--[=[
 	Pre-allocates objects into the available pool.
 
-	Count is capped to MaxSize. This only affects idle objects; it does not limit the number of
-	active objects that can be checked out concurrently.
-
-	Objects are created and then reset before becoming available.
-	If Reset fails for an object, it is destroyed and the pool continues creating until the requested
-	available count is met.
-
+	Count is capped to MaxSize. Objects are created and reset before becoming available.
+	If Reset fails for an object, it is destroyed and creation continues.
 	No-op if the pool has been destroyed.
-]]
+
+	@param Count number -- The target number of idle objects
+]=]
 function PoolMetatable.Warm<T>(Self: PoolInternal<T>, Count: number)
 	if Self.IsDestroyed then
 		return
@@ -291,18 +267,20 @@ function PoolMetatable.Warm<T>(Self: PoolInternal<T>, Count: number)
 	end
 end
 
---[[
+--[=[
 	Returns the number of idle objects currently available in the pool.
-]]
+
+	@return number -- The available count
+]=]
 function PoolMetatable.GetAvailableCount<T>(Self: PoolInternal<T>): number
 	return #Self.Available
 end
 
---[[
+--[=[
 	Returns the number of objects currently checked out (active).
 
-	This is derived from the internal active-set, not from any external tracking.
-]]
+	@return number -- The active count
+]=]
 function PoolMetatable.GetActiveCount<T>(Self: PoolInternal<T>): number
 	local Count = 0
 	for _ in pairs(Self.Active) do
@@ -311,15 +289,12 @@ function PoolMetatable.GetActiveCount<T>(Self: PoolInternal<T>): number
 	return Count
 end
 
---[[
+--[=[
 	Destroys all objects in the pool (both active and available) and resets tracking.
 
-	After Clear(), any later Return() calls for objects that were previously active are treated as untracked:
-	- destroyed if DestroyUntrackedReturns is true
-	- ignored if DestroyUntrackedReturns is false
-
+	After Clear(), any later Return() calls for previously active objects are treated as untracked.
 	No-op if the pool has been destroyed.
-]]
+]=]
 function PoolMetatable.Clear<T>(Self: PoolInternal<T>)
 	if Self.IsDestroyed then
 		return
@@ -337,15 +312,12 @@ function PoolMetatable.Clear<T>(Self: PoolInternal<T>)
 	end
 end
 
---[[
-	Destroys the pool.
+--[=[
+	Destroys the pool permanently.
 
-	- Clears all objects (active and available)
-	- Marks the pool as destroyed
-	- After destruction:
-		- Get() errors
-		- Return() destroys the provided object deterministically
-]]
+	Clears all objects (active and available) and marks the pool as destroyed.
+	After destruction, Get() errors and Return() destroys the provided object.
+]=]
 function PoolMetatable.Destroy<T>(Self: PoolInternal<T>)
 	if Self.IsDestroyed then
 		return
@@ -378,7 +350,6 @@ local function CreatePool<T>(Config: PoolConfig<T>): ObjectPool<T>
 		ResetErrorMode = DEFAULT_RESET_ERROR_MODE
 	end
 
-
 	local PoolInternalObject: PoolInternal<T> = {
 		Available = {},
 		Active = {},
@@ -407,21 +378,12 @@ local function CreatePool<T>(Config: PoolConfig<T>): ObjectPool<T>
 	return PoolObject
 end
 
---[[
-	Creates a new ObjectPool.
+--[=[
+	Creates a new ObjectPool with the given configuration.
 
-	Required config:
-	- Create: () -> T
-	- Reset: (T) -> ()
-
-	Optional config:
-	- InitialSize: number (default 10)
-	- MaxSize: number (default 100)
-	- DestroyUntrackedReturns: boolean (default true)
-	- ResetErrorMode: "Warn" | "Error" | "Silent" (default "Warn")
-
-	Returns an ObjectPool<T>.
-]]
+	@param Config PoolConfig<T> -- Pool configuration with Create and Reset functions
+	@return ObjectPool<T> -- The new pool instance
+]=]
 local function New<T>(Config: PoolConfig<T>): ObjectPool<T>
 	return CreatePool(Config)
 end

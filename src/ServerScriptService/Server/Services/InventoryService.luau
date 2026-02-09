@@ -1,5 +1,16 @@
 --!strict
 
+--[=[
+	@class InventoryService
+
+	Server-side inventory management with slot-based CRUD, rate limiting,
+	cross-inventory transfers, and runtime (session-scoped) inventories.
+
+	Validates all client requests against type checks, inventory rules, and
+	rate limits before performing mutations. Fires signals and syncs slot
+	changes back to the client.
+]=]
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
@@ -120,18 +131,31 @@ local function SyncAllInventories(Player: Player)
 	end
 end
 
+--[=[
+	Creates the service Trove for connection cleanup.
+]=]
 function InventoryService.Init()
 	ServiceTrove = Trove.new()
 end
 
+--[=[
+	Subscribes to player lifecycle events and client inventory action packets.
+	Validates all incoming packet data before processing.
+]=]
 function InventoryService.Start()
-	ServiceTrove:Add(Players.PlayerRemoving:Connect(function(Player: Player)
+	ServiceTrove:Connect(Players.PlayerRemoving, function(Player: Player)
 		InventoryService.CleanupPlayerRuntimeInventories(Player)
 		InventoryActionLimiter.Reset(GetPlayerRateKey(Player))
-	end))
+	end)
 
 	ServiceTrove:Connect(PlayerDataService.ProfileLoaded :: any, function(Player: Player, _Data: any)
 		SyncAllInventories(Player)
+	end)
+
+	ServiceTrove:Connect(Packets.InventoryRequest.OnServerEvent :: any, function(Player: Player)
+		if PlayerDataService.IsLoaded(Player) then
+			SyncAllInventories(Player)
+		end
 	end)
 
 	ServiceTrove:Connect(Packets.InventoryTransfer.OnServerEvent :: any, function(
@@ -141,12 +165,24 @@ function InventoryService.Start()
 		TargetInventory: any,
 		TargetIndex: any
 	)
-		if typeof(SourceInventory) ~= "string" then return end
-		if typeof(SourceIndex) ~= "number" then return end
-		if typeof(TargetInventory) ~= "string" then return end
-		if typeof(TargetIndex) ~= "number" then return end
-		if not IsValidInventoryName(SourceInventory) then return end
-		if not IsValidInventoryName(TargetInventory) then return end
+		if typeof(SourceInventory) ~= "string" then
+			return
+		end
+		if typeof(SourceIndex) ~= "number" then
+			return
+		end
+		if typeof(TargetInventory) ~= "string" then
+			return
+		end
+		if typeof(TargetIndex) ~= "number" then
+			return
+		end
+		if not IsValidInventoryName(SourceInventory) then
+			return
+		end
+		if not IsValidInventoryName(TargetInventory) then
+			return
+		end
 
 		if not InventoryActionLimiter.Consume(GetPlayerRateKey(Player)) then
 			SyncSlot(Player, SourceInventory, SourceIndex)
@@ -168,12 +204,24 @@ function InventoryService.Start()
 		TargetInventory: any,
 		TargetIndex: any
 	)
-		if typeof(SourceInventory) ~= "string" then return end
-		if typeof(SourceIndex) ~= "number" then return end
-		if typeof(TargetInventory) ~= "string" then return end
-		if typeof(TargetIndex) ~= "number" then return end
-		if not IsValidInventoryName(SourceInventory) then return end
-		if not IsValidInventoryName(TargetInventory) then return end
+		if typeof(SourceInventory) ~= "string" then
+			return
+		end
+		if typeof(SourceIndex) ~= "number" then
+			return
+		end
+		if typeof(TargetInventory) ~= "string" then
+			return
+		end
+		if typeof(TargetIndex) ~= "number" then
+			return
+		end
+		if not IsValidInventoryName(SourceInventory) then
+			return
+		end
+		if not IsValidInventoryName(TargetInventory) then
+			return
+		end
 
 		if not InventoryActionLimiter.Consume(GetPlayerRateKey(Player)) then
 			SyncSlot(Player, SourceInventory, SourceIndex)
@@ -194,10 +242,18 @@ function InventoryService.Start()
 		SlotIndex: any,
 		Quantity: any
 	)
-		if typeof(InventoryName) ~= "string" then return end
-		if typeof(SlotIndex) ~= "number" then return end
-		if typeof(Quantity) ~= "number" then return end
-		if not IsValidInventoryName(InventoryName) then return end
+		if typeof(InventoryName) ~= "string" then
+			return
+		end
+		if typeof(SlotIndex) ~= "number" then
+			return
+		end
+		if typeof(Quantity) ~= "number" then
+			return
+		end
+		if not IsValidInventoryName(InventoryName) then
+			return
+		end
 
 		if not InventoryActionLimiter.Consume(GetPlayerRateKey(Player)) then
 			SyncSlot(Player, InventoryName, SlotIndex)
@@ -216,11 +272,21 @@ function InventoryService.Start()
 		SourceIndex: any,
 		TargetInventory: any
 	)
-		if typeof(SourceInventory) ~= "string" then return end
-		if typeof(SourceIndex) ~= "number" then return end
-		if typeof(TargetInventory) ~= "string" then return end
-		if not IsValidInventoryName(SourceInventory) then return end
-		if not IsValidInventoryName(TargetInventory) then return end
+		if typeof(SourceInventory) ~= "string" then
+			return
+		end
+		if typeof(SourceIndex) ~= "number" then
+			return
+		end
+		if typeof(TargetInventory) ~= "string" then
+			return
+		end
+		if not IsValidInventoryName(SourceInventory) then
+			return
+		end
+		if not IsValidInventoryName(TargetInventory) then
+			return
+		end
 
 		if not InventoryActionLimiter.Consume(GetPlayerRateKey(Player)) then
 			SyncSlot(Player, SourceInventory, SourceIndex)
@@ -242,12 +308,24 @@ function InventoryService.Start()
 		TargetInventory: any,
 		TargetIndex: any
 	)
-		if typeof(SourceInventory) ~= "string" then return end
-		if typeof(SourceIndex) ~= "number" then return end
-		if typeof(TargetInventory) ~= "string" then return end
-		if typeof(TargetIndex) ~= "number" then return end
-		if not IsValidInventoryName(SourceInventory) then return end
-		if not IsValidInventoryName(TargetInventory) then return end
+		if typeof(SourceInventory) ~= "string" then
+			return
+		end
+		if typeof(SourceIndex) ~= "number" then
+			return
+		end
+		if typeof(TargetInventory) ~= "string" then
+			return
+		end
+		if typeof(TargetIndex) ~= "number" then
+			return
+		end
+		if not IsValidInventoryName(SourceInventory) then
+			return
+		end
+		if not IsValidInventoryName(TargetInventory) then
+			return
+		end
 
 		if not InventoryActionLimiter.Consume(GetPlayerRateKey(Player)) then
 			SyncInventory(Player, SourceInventory)
@@ -269,16 +347,34 @@ function InventoryService.Start()
 	end
 end
 
+--[=[
+	Destroys the service Trove, rate limiter, and clears runtime inventories.
+]=]
 function InventoryService.Stop()
 	ServiceTrove:Destroy()
 	InventoryActionLimiter.Destroy()
 	table.clear(RuntimeInventories)
 end
 
+--[=[
+	Returns the full inventory table for the given player and inventory name.
+
+	@param Player Player -- The owning player
+	@param InventoryName string -- The inventory to fetch
+	@return Inventory? -- The inventory table, or nil
+]=]
 function InventoryService.GetInventory(Player: Player, InventoryName: string): Inventory?
 	return GetPlayerInventory(Player, InventoryName)
 end
 
+--[=[
+	Returns the ItemStack at a specific slot.
+
+	@param Player Player -- The owning player
+	@param InventoryName string -- The inventory to look in
+	@param SlotIndex number -- The slot to check
+	@return ItemStack? -- The stack at that slot, or nil
+]=]
 function InventoryService.GetSlot(Player: Player, InventoryName: string, SlotIndex: number): ItemStack?
 	local TargetInventory = GetPlayerInventory(Player, InventoryName)
 	if not TargetInventory then
@@ -288,6 +384,17 @@ function InventoryService.GetSlot(Player: Player, InventoryName: string, SlotInd
 	return InventoryUtil.GetSlot(TargetInventory, SlotIndex)
 end
 
+--[=[
+	Adds items to a player's inventory, distributing across existing stacks and empty slots.
+	Returns the number of items that could not fit (overflow).
+
+	@param Player Player -- The owning player
+	@param InventoryName string -- The target inventory
+	@param ItemId string -- The item type to add
+	@param Quantity number -- How many to add
+	@param TargetMetadata Metadata? -- Optional metadata for the items
+	@return number -- The overflow quantity that did not fit
+]=]
 function InventoryService.AddItem(
 	Player: Player,
 	InventoryName: string,
@@ -347,6 +454,16 @@ function InventoryService.AddItem(
 	return Overflow
 end
 
+--[=[
+	Removes items from a player's inventory. Returns the number actually removed.
+
+	@param Player Player -- The owning player
+	@param InventoryName string -- The target inventory
+	@param ItemId string -- The item type to remove
+	@param Quantity number -- How many to remove
+	@param TargetMetadata Metadata? -- Optional metadata filter
+	@return number -- The number of items actually removed
+]=]
 function InventoryService.RemoveItem(
 	Player: Player,
 	InventoryName: string,
@@ -390,6 +507,16 @@ function InventoryService.RemoveItem(
 	return Removed
 end
 
+--[=[
+	Checks whether a player has at least the given quantity of an item.
+
+	@param Player Player -- The owning player
+	@param InventoryName string -- The inventory to check
+	@param ItemId string -- The item type
+	@param Quantity number -- The minimum required
+	@param TargetMetadata Metadata? -- Optional metadata filter
+	@return boolean -- True if the player has enough
+]=]
 function InventoryService.HasItem(
 	Player: Player,
 	InventoryName: string,
@@ -406,6 +533,15 @@ function InventoryService.HasItem(
 	return InventoryUtil.HasItem(TargetInventory, ItemId, Quantity, MaxSlots, TargetMetadata)
 end
 
+--[=[
+	Returns the total count of a specific item across all slots.
+
+	@param Player Player -- The owning player
+	@param InventoryName string -- The inventory to count in
+	@param ItemId string -- The item type
+	@param TargetMetadata Metadata? -- Optional metadata filter
+	@return number -- The total quantity
+]=]
 function InventoryService.GetItemCount(
 	Player: Player,
 	InventoryName: string,
@@ -421,6 +557,15 @@ function InventoryService.GetItemCount(
 	return InventoryUtil.GetItemCount(TargetInventory, ItemId, MaxSlots, TargetMetadata)
 end
 
+--[=[
+	Directly sets a slot to a given ItemStack (or nil to clear it).
+
+	@param Player Player -- The owning player
+	@param InventoryName string -- The target inventory
+	@param SlotIndex number -- The slot to set
+	@param Stack ItemStack? -- The stack to place, or nil to clear
+	@return boolean -- True if the operation succeeded
+]=]
 function InventoryService.SetSlot(
 	Player: Player,
 	InventoryName: string,
@@ -452,6 +597,16 @@ function InventoryService.SetSlot(
 	return true
 end
 
+--[=[
+	Transfers (or merges) a slot from one inventory to another.
+
+	@param Player Player -- The owning player
+	@param SourceInventoryName string -- Source inventory name
+	@param SourceIndex number -- Source slot index
+	@param TargetInventoryName string -- Target inventory name
+	@param TargetIndex number -- Target slot index
+	@return boolean -- True if the transfer succeeded
+]=]
 function InventoryService.TransferSlot(
 	Player: Player,
 	SourceInventoryName: string,
@@ -506,6 +661,16 @@ function InventoryService.TransferSlot(
 	return Success
 end
 
+--[=[
+	Swaps two slots without merging.
+
+	@param Player Player -- The owning player
+	@param SourceInventoryName string -- Source inventory name
+	@param SourceIndex number -- Source slot index
+	@param TargetInventoryName string -- Target inventory name
+	@param TargetIndex number -- Target slot index
+	@return boolean -- True if the swap succeeded
+]=]
 function InventoryService.SwapSlots(
 	Player: Player,
 	SourceInventoryName: string,
@@ -558,6 +723,16 @@ function InventoryService.SwapSlots(
 	return true
 end
 
+--[=[
+	Deposits a slot's contents into another inventory, distributing across
+	existing stacks and empty slots. Partial deposits leave overflow in the source.
+
+	@param Player Player -- The owning player
+	@param SourceInventoryName string -- Source inventory name
+	@param SourceIndex number -- Source slot index
+	@param TargetInventoryName string -- Target inventory name
+	@return boolean -- True if at least one item was deposited
+]=]
 function InventoryService.DepositSlot(
 	Player: Player,
 	SourceInventoryName: string,
@@ -626,6 +801,16 @@ function InventoryService.DepositSlot(
 	return Deposited > 0
 end
 
+--[=[
+	Transfers a slot to a target slot, depositing overflow back into the source inventory.
+
+	@param Player Player -- The owning player
+	@param SourceInventoryName string -- Source inventory name
+	@param SourceIndex number -- Source slot index
+	@param TargetInventoryName string -- Target inventory name
+	@param TargetIndex number -- Target slot index
+	@return boolean -- True if the operation succeeded
+]=]
 function InventoryService.TransferAndDeposit(
 	Player: Player,
 	SourceInventoryName: string,
@@ -705,6 +890,15 @@ function InventoryService.TransferAndDeposit(
 	return true
 end
 
+--[=[
+	Drops items from a slot, reducing quantity or clearing the slot entirely.
+
+	@param Player Player -- The owning player
+	@param InventoryName string -- The inventory to drop from
+	@param SlotIndex number -- The slot index
+	@param Quantity number -- How many to drop (0 = all)
+	@return boolean -- True if items were dropped
+]=]
 function InventoryService.DropItem(
 	Player: Player,
 	InventoryName: string,
@@ -742,6 +936,13 @@ function InventoryService.DropItem(
 	return true
 end
 
+--[=[
+	Clears all slots in a player's inventory.
+
+	@param Player Player -- The owning player
+	@param InventoryName string -- The inventory to clear
+	@return boolean -- True if the inventory was cleared
+]=]
 function InventoryService.ClearInventory(Player: Player, InventoryName: string): boolean
 	local TargetInventory = GetPlayerInventory(Player, InventoryName)
 	if not TargetInventory then
@@ -757,6 +958,14 @@ function InventoryService.ClearInventory(Player: Player, InventoryName: string):
 	return true
 end
 
+--[=[
+	Creates a session-scoped runtime inventory (not persisted).
+
+	@param InventoryId string -- Unique identifier for the runtime inventory
+	@param MaxSlots number -- Maximum number of slots
+	@param AllowedTypes { string }? -- Optional item type whitelist
+	@return boolean -- True if created successfully
+]=]
 function InventoryService.CreateRuntimeInventory(
 	InventoryId: string,
 	MaxSlots: number,
@@ -776,11 +985,23 @@ function InventoryService.CreateRuntimeInventory(
 	return true
 end
 
+--[=[
+	Returns the inventory table for a runtime inventory.
+
+	@param InventoryId string -- The runtime inventory identifier
+	@return Inventory? -- The inventory table, or nil
+]=]
 function InventoryService.GetRuntimeInventory(InventoryId: string): Inventory?
 	local RuntimeData = RuntimeInventories[InventoryId]
 	return if RuntimeData then RuntimeData.Inventory else nil
 end
 
+--[=[
+	Destroys a runtime inventory.
+
+	@param InventoryId string -- The runtime inventory identifier
+	@return boolean -- True if destroyed
+]=]
 function InventoryService.DestroyRuntimeInventory(InventoryId: string): boolean
 	if not RuntimeInventories[InventoryId] then
 		return false
@@ -790,6 +1011,15 @@ function InventoryService.DestroyRuntimeInventory(InventoryId: string): boolean
 	return true
 end
 
+--[=[
+	Adds items to a runtime inventory.
+
+	@param InventoryId string -- The runtime inventory identifier
+	@param ItemId string -- The item type to add
+	@param Quantity number -- How many to add
+	@param TargetMetadata Metadata? -- Optional metadata
+	@return number -- The overflow quantity
+]=]
 function InventoryService.AddItemToRuntime(
 	InventoryId: string,
 	ItemId: string,
@@ -815,6 +1045,16 @@ function InventoryService.AddItemToRuntime(
 	return InventoryUtil.AddItem(RuntimeData.Inventory, ItemId, Quantity, RuntimeData.MaxSlots, TargetMetadata)
 end
 
+--[=[
+	Transfers a slot from a player inventory into a runtime inventory.
+
+	@param Player Player -- The owning player
+	@param SourceInventoryName string -- The player's source inventory
+	@param SourceIndex number -- Source slot index
+	@param RuntimeInventoryId string -- Target runtime inventory
+	@param TargetIndex number -- Target slot index
+	@return boolean -- True if the transfer succeeded
+]=]
 function InventoryService.TransferToRuntime(
 	Player: Player,
 	SourceInventoryName: string,
@@ -865,6 +1105,16 @@ function InventoryService.TransferToRuntime(
 	return Success
 end
 
+--[=[
+	Transfers a slot from a runtime inventory back into a player inventory.
+
+	@param Player Player -- The owning player
+	@param RuntimeInventoryId string -- Source runtime inventory
+	@param SourceIndex number -- Source slot index
+	@param TargetInventoryName string -- The player's target inventory
+	@param TargetIndex number -- Target slot index
+	@return boolean -- True if the transfer succeeded
+]=]
 function InventoryService.TransferFromRuntime(
 	Player: Player,
 	RuntimeInventoryId: string,
@@ -916,6 +1166,11 @@ function InventoryService.TransferFromRuntime(
 	return Success
 end
 
+--[=[
+	Removes all runtime inventories associated with a player (prefixed with "Player_{UserId}_").
+
+	@param Player Player -- The player whose runtime inventories should be cleaned up
+]=]
 function InventoryService.CleanupPlayerRuntimeInventories(Player: Player)
 	local Prefix = string.format("Player_%d_", Player.UserId)
 

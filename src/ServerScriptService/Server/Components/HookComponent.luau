@@ -1,5 +1,15 @@
 --!strict
 
+--[=[
+	@class HookComponent
+
+	Toggleable hook registration and cleanup for entity modifiers.
+
+	Manages activation and deactivation of named hooks (buffs, debuffs,
+	status effects, etc.) on an entity. Each hook can return a cleanup
+	function from its OnActivate, which is called on unregister.
+]=]
+
 local ServerScriptService = game:GetService("ServerScriptService")
 local Server = ServerScriptService:WaitForChild("Server")
 local HookLoader = require(Server.HookUtil.HookLoader)
@@ -22,10 +32,23 @@ type ActiveHook = {
 	Cleanup: (() -> ())?,
 }
 
+--[=[
+	Returns the Hooks component instance from the given entity, or nil.
+
+	@param Entity any -- The entity to look up
+	@return Type? -- The hooks component, or nil
+]=]
 function HookComponent.From(Entity: any): Type?
 	return Entity:GetComponent("Hooks")
 end
 
+--[=[
+	Creates a new HookComponent instance bound to the given entity.
+
+	@param Entity any -- The entity this component belongs to
+	@param _Context any -- Entity context (unused)
+	@return HookInstance -- The component instance
+]=]
 function HookComponent.Create(Entity: any, _Context: any): HookInstance
 	local ActiveHooks: { [string]: ActiveHook } = {}
 
@@ -61,24 +84,20 @@ function HookComponent.Create(Entity: any, _Context: any): HookInstance
 		end
 
 		if ActiveHook.Cleanup then
-			local Success, ErrorMessage = pcall(function(): any
-				return ActiveHook.Cleanup()
+			local Success = pcall(function()
+				ActiveHook.Cleanup()
 			end)
-
 			if not Success then
-				warn(string.format("[HookComponent] Hook '%s' cleanup failed: %s", HookName, tostring(ErrorMessage)))
+				warn(string.format("[HookComponent] Hook '%s' cleanup failed", HookName))
 			end
 		end
 
 		if HookLoader then
 			local Hook = HookLoader.Get(HookName)
 			if Hook and Hook.OnDeactivate then
-				local Success, ErrorMessage = pcall(function(): any
-					return Hook.OnDeactivate(Entity)
-				end)
-
+				local Success = pcall(Hook.OnDeactivate, Entity)
 				if not Success then
-					warn(string.format("[HookComponent] Hook '%s' deactivation failed: %s", HookName, tostring(ErrorMessage)))
+					warn(string.format("[HookComponent] Hook '%s' deactivation failed", HookName))
 				end
 			end
 		end

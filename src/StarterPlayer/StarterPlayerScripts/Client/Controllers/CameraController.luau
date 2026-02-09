@@ -1,5 +1,15 @@
 --!strict
 
+--[=[
+	@class CameraController
+
+	Camera shake management.
+
+	Wraps the Shake package to provide keyed camera shakes that respect
+	the player's screen shake setting. Shakes are automatically cleaned
+	up when completed or when the setting is toggled off.
+]=]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
@@ -24,23 +34,39 @@ local function IsScreenShakeEnabled(): boolean
     return SettingsController.IsScreenShakeEnabled()
 end
 
+--[=[
+	Creates the controller Trove for connection cleanup.
+]=]
 function CameraController.Init()
     ControllerTrove = Trove.new()
 end
 
+--[=[
+	Subscribes to screen shake setting changes and stops all shakes if disabled.
+]=]
 function CameraController.Start()
-    ControllerTrove:Add(SettingsController.SettingChanged:Connect(function(Key: string, Value: any)
+    ControllerTrove:Connect(SettingsController.SettingChanged :: any, function(Key: string, Value: any)
         if Key == "ScreenShakeEnabled" and Value == false then
             CameraController.StopAllShakes()
         end
-    end))
+    end)
 end
 
+--[=[
+	Stops all active shakes and destroys the controller Trove.
+]=]
 function CameraController.Stop()
     CameraController.StopAllShakes()
     ControllerTrove:Destroy()
 end
 
+--[=[
+	Sets the camera mode. "Default" restores Roblox camera control,
+	"Locked" switches to scriptable mode aimed at the given Target.
+
+	@param Mode string -- "Default" or "Locked"
+	@param Target Instance? -- Target instance for locked mode
+]=]
 function CameraController.SetMode(Mode: string, Target: Instance?)
     if not Camera then
         Camera = Workspace.CurrentCamera
@@ -57,6 +83,14 @@ function CameraController.SetMode(Mode: string, Target: Instance?)
     end
 end
 
+--[=[
+	Starts a camera shake with the given key. If a shake with the same key
+	is already active, it is stopped first. Respects the screen shake setting.
+
+	@param Key string -- Unique identifier for this shake
+	@param Amplitude number -- Strength of the shake
+	@param Duration number -- Total duration in seconds
+]=]
 function CameraController.Shake(Key: string, Amplitude: number, Duration: number)
     if not IsScreenShakeEnabled() then
         return
@@ -94,6 +128,11 @@ function CameraController.Shake(Key: string, Amplitude: number, Duration: number
     end)
 end
 
+--[=[
+	Stops a specific active shake by key.
+
+	@param Key string -- The shake key to stop
+]=]
 function CameraController.StopShake(Key: string)
     local ExistingShake = ActiveShakes[Key]
     if ExistingShake then
@@ -102,6 +141,9 @@ function CameraController.StopShake(Key: string)
     end
 end
 
+--[=[
+	Stops all active camera shakes.
+]=]
 function CameraController.StopAllShakes()
     for Key, ShakeInstance in ActiveShakes do
         ShakeInstance:Stop()
@@ -109,6 +151,11 @@ function CameraController.StopAllShakes()
     end
 end
 
+--[=[
+	Returns the current workspace Camera, fetching it if needed.
+
+	@return Camera? -- The current camera, or nil
+]=]
 function CameraController.GetCamera(): Camera?
     if not Camera then
         Camera = Workspace.CurrentCamera

@@ -1,5 +1,15 @@
 --!strict
 
+--[=[
+	@class HotbarController
+
+	Hotbar slot selection and keybind management.
+
+	Binds input actions to hotbar slots based on server-synced keybinds,
+	tracks the currently selected slot, and fires signals on
+	selection/deselection changes.
+]=]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -105,10 +115,16 @@ local function ApplySingleKeybind(SlotIndex: number, KeyCodeName: string)
 	HotbarController.KeybindsUpdated:Fire()
 end
 
+--[=[
+	Creates the controller Trove for connection cleanup.
+]=]
 function HotbarController.Init()
 	ControllerTrove = Trove.new()
 end
 
+--[=[
+	Subscribes to keybind sync packets and inventory slot updates for auto-deselection.
+]=]
 function HotbarController.Start()
 	ControllerTrove:Connect(Packets.KeybindSync.OnClientEvent :: any, function(AllKeybinds: any)
 		if typeof(AllKeybinds) ~= "table" then
@@ -156,6 +172,9 @@ function HotbarController.Start()
 	end)
 end
 
+--[=[
+	Unbinds all hotbar actions, destroys the Trove, and resets state.
+]=]
 function HotbarController.Stop()
 	UnbindAllSlots()
 	ControllerTrove:Destroy()
@@ -163,10 +182,18 @@ function HotbarController.Stop()
 	table.clear(HotbarKeybinds)
 end
 
+--[=[
+	Programmatically selects a hotbar slot as if the player pressed it.
+
+	@param SlotIndex number -- The slot to select
+]=]
 function HotbarController.SelectSlot(SlotIndex: number)
 	OnSlotPressed(SlotIndex)
 end
 
+--[=[
+	Deselects the currently selected slot, if any.
+]=]
 function HotbarController.DeselectSlot()
 	local PreviousSlot = SelectedSlot
 	SelectedSlot = nil
@@ -176,14 +203,31 @@ function HotbarController.DeselectSlot()
 	end
 end
 
+--[=[
+	Returns the currently selected slot index, or nil.
+
+	@return number? -- The selected slot index
+]=]
 function HotbarController.GetSelectedSlot(): number?
 	return SelectedSlot
 end
 
+--[=[
+	Returns the KeyCode name bound to a specific hotbar slot.
+
+	@param SlotIndex number -- The slot to look up
+	@return string? -- The KeyCode name, or nil
+]=]
 function HotbarController.GetKeybind(SlotIndex: number): string?
 	return HotbarKeybinds[SlotIndex]
 end
 
+--[=[
+	Changes a hotbar keybind locally and sends the change to the server.
+
+	@param SlotIndex number -- The slot to rebind
+	@param KeyCodeName string -- The new KeyCode name
+]=]
 function HotbarController.SetKeybind(SlotIndex: number, KeyCodeName: string)
 	ApplySingleKeybind(SlotIndex, KeyCodeName)
 	Packets.KeybindChanged:Fire(KEYBIND_CATEGORY, SlotIndex, KeyCodeName)
