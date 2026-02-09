@@ -13,7 +13,7 @@ local InventoryConfig: { [string]: InventoryRule } = {
 	},
 
 	Hotbar = {
-		MaxSlots = 6,
+		MaxSlots = 10,
 		AllowedTypes = { "Skill", "Consumable", "Weapon" },
 	},
 

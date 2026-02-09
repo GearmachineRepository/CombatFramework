@@ -165,6 +165,23 @@ function InventoryController.RequestSwap(
 	Packets.InventorySwap:Fire(SourceInventory, SourceIndex, TargetInventory, TargetIndex)
 end
 
+function InventoryController.RequestDeposit(
+	SourceInventory: string,
+	SourceIndex: number,
+	TargetInventory: string
+)
+	Packets.InventoryDeposit:Fire(SourceInventory, SourceIndex, TargetInventory)
+end
+
+function InventoryController.RequestTransferAndDeposit(
+	SourceInventory: string,
+	SourceIndex: number,
+	TargetInventory: string,
+	TargetIndex: number
+)
+	Packets.InventoryTransferDeposit:Fire(SourceInventory, SourceIndex, TargetInventory, TargetIndex)
+end
+
 function InventoryController.RequestDrop(InventoryName: string, SlotIndex: number, Quantity: number?)
 	local DropQuantity = Quantity or 0
 	Packets.InventoryDrop:Fire(InventoryName, SlotIndex, DropQuantity)

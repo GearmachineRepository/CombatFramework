@@ -16,7 +16,7 @@ local TableUtil = Packages.TableUtil
 local ENABLED = false
 
 type Profile = typeof(ProfileStore.New("", DataTemplate):StartSessionAsync("", { Cancel = function()
-    return false
+	return false
 end }))
 
 local PlayerDataService = {}
@@ -32,85 +32,99 @@ function PlayerDataService.Init()
 end
 
 function PlayerDataService.Start()
-    if not ENABLED then
-        return
-    end
+	if ENABLED then
+		for _, Player in Players:GetPlayers() do
+			task.spawn(PlayerDataService.LoadProfile, Player)
+		end
 
-    for _, Player in Players:GetPlayers() do
-        task.spawn(PlayerDataService.LoadProfile, Player)
-    end
+		Players.PlayerAdded:Connect(PlayerDataService.LoadProfile)
+		Players.PlayerRemoving:Connect(PlayerDataService.ReleaseProfile)
+	else
+		for _, Player in Players:GetPlayers() do
+			task.spawn(PlayerDataService.LoadMockProfile, Player)
+		end
 
-    Players.PlayerAdded:Connect(PlayerDataService.LoadProfile)
-    Players.PlayerRemoving:Connect(PlayerDataService.ReleaseProfile)
+		Players.PlayerAdded:Connect(function(Player: Player)
+			task.spawn(PlayerDataService.LoadMockProfile, Player)
+		end)
+
+		Players.PlayerRemoving:Connect(function(Player: Player)
+			MockData[Player] = nil
+			PlayerDataService.ProfileReleased:Fire(Player)
+		end)
+	end
+end
+
+function PlayerDataService.LoadMockProfile(Player: Player)
+	if Player.Parent ~= Players then
+		return
+	end
+
+	local Data = TableUtil.Copy(DataTemplate, true)
+	MockData[Player] = Data
+	PlayerDataService.ProfileLoaded:Fire(Player, Data)
 end
 
 function PlayerDataService.LoadProfile(Player: Player)
-    if not GameStore then
-        return
-    end
+	if not GameStore then
+		return
+	end
 
-    local Profile = GameStore:StartSessionAsync(`Player_{Player.UserId}`, {
-        Cancel = function()
-            return Player.Parent ~= Players
-        end,
-    })
+	local Profile = GameStore:StartSessionAsync(`Player_{Player.UserId}`, {
+		Cancel = function()
+			return Player.Parent ~= Players
+		end,
+	})
 
-    if not Profile then
-        Player:Kick("Failed to load data. Please rejoin.")
-        return
-    end
+	if not Profile then
+		Player:Kick("Failed to load data. Please rejoin.")
+		return
+	end
 
-    Profile:AddUserId(Player.UserId)
-    Profile:Reconcile()
+	Profile:AddUserId(Player.UserId)
+	Profile:Reconcile()
 
-    Profile.OnSessionEnd:Connect(function()
-        Profiles[Player] = nil
-        PlayerDataService.ProfileReleased:Fire(Player)
-        Player:Kick("Session ended. Please rejoin.")
-    end)
+	Profile.OnSessionEnd:Connect(function()
+		Profiles[Player] = nil
+		PlayerDataService.ProfileReleased:Fire(Player)
+		Player:Kick("Session ended. Please rejoin.")
+	end)
 
-    if Player.Parent ~= Players then
-        Profile:EndSession()
-        return
-    end
+	if Player.Parent ~= Players then
+		Profile:EndSession()
+		return
+	end
 
-    Profiles[Player] = Profile
-    PlayerDataService.ProfileLoaded:Fire(Player, Profile.Data)
+	Profiles[Player] = Profile
+	PlayerDataService.ProfileLoaded:Fire(Player, Profile.Data)
 end
 
 function PlayerDataService.ReleaseProfile(Player: Player)
-    local Profile = Profiles[Player]
-    if Profile then
-        Profile:EndSession()
-    end
+	local Profile = Profiles[Player]
+	if Profile then
+		Profile:EndSession()
+	end
 end
 
 function PlayerDataService.GetProfile(Player: Player): Profile?
-    return Profiles[Player]
+	return Profiles[Player]
 end
 
 function PlayerDataService.GetData(Player: Player): typeof(DataTemplate)?
-    local Profile = Profiles[Player]
-    if Profile then
-        return Profile.Data
-    end
+	local Profile = Profiles[Player]
+	if Profile then
+		return Profile.Data
+	end
 
-    if not ENABLED then
-        if not MockData[Player] then
-            MockData[Player] = TableUtil.Copy(DataTemplate, true)
-        end
-        return MockData[Player]
-    end
-
-    return nil
+	return MockData[Player]
 end
 
 function PlayerDataService.IsLoaded(Player: Player): boolean
-    return Profiles[Player] ~= nil
-end
+	if Profiles[Player] ~= nil then
+		return true
+	end
 
-Players.PlayerRemoving:Connect(function(Player)
-    MockData[Player] = nil
-end)
+	return MockData[Player] ~= nil
+end
 
 return PlayerDataService

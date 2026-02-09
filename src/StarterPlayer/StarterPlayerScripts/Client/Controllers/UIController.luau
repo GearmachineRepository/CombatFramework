@@ -26,12 +26,21 @@ function UIController.Init()
 end
 
 function UIController.Start()
-    local UIFolder = ReplicatedStorage:FindFirstChild("UI")
-    if UIFolder then
-        for _, Child in UIFolder:GetChildren() do
-            if Child:IsA("ScreenGui") then
-                UIController.RegisterScreen(Child.Name, Child:Clone())
-            end
+    PlayerGui.ChildAdded:Connect(function(Child: Instance)
+        if Child:IsA("ScreenGui") then
+            UIController.RegisterScreen(Child.Name, Child)
+        end
+    end)
+
+    PlayerGui.ChildRemoved:Connect(function(Child: Instance)
+        if Child:IsA("ScreenGui") then
+            UIController.UnregisterScreen(Child.Name)
+        end
+    end)
+
+    for _, Child in PlayerGui:GetChildren() do
+        if Child:IsA("ScreenGui") then
+            UIController.RegisterScreen(Child.Name, Child)
         end
     end
 end
@@ -50,7 +59,6 @@ function UIController.RegisterScreen(Name: string, Screen: ScreenGui)
     end
 
     Screen.Name = Name
-    Screen.Enabled = false
     Screen.Parent = PlayerGui
     Screens[Name] = Screen
     ControllerTrove:Add(Screen)

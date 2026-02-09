@@ -15,8 +15,8 @@ HookLoader.Configure(Server.Hooks)
 Ensemble.Init({
 	Components = Server.Components,
 	Archetypes = {
-		Player = { "Stats", "States", "Modifiers" },
-		Enemy = { "Stats", "States", "Modifiers" },
+		Player = { "Stats", "States", "Modifiers", "Hotbar" },
+		Enemy = { "Stats", "States", "Modifiers", "Hotbar" },
 	},
 })
 

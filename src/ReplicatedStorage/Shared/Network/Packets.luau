@@ -178,6 +178,26 @@ return {
 		Packet.NumberU8  -- Quantity (0 = all)
 	),
 
+	-- Client → Server: Request initial inventory data
+	InventoryRequest = Packet(
+		"InventoryRequest"
+	),
+
+	InventoryDeposit = Packet(
+		"InventoryDeposit",
+		Packet.String,
+		Packet.NumberU8,
+		Packet.String
+	),
+
+	InventoryTransferDeposit = Packet(
+		"InventoryTransferDeposit",
+		Packet.String,
+		Packet.NumberU8,
+		Packet.String,
+		Packet.NumberU8
+	),
+
 	-- Server → Client: Full inventory sync
 	InventorySync = Packet(
 		"InventorySync",
@@ -207,5 +227,17 @@ return {
 		Packet.String,   -- InventoryName
 		Packet.String,   -- ItemId
 		Packet.NumberU16 -- Quantity
+	),
+
+	KeybindSync = Packet(
+		"KeybindSync",
+		Packet.Any
+	),
+
+	KeybindChanged = Packet(
+		"KeybindChanged",
+		Packet.String,
+		Packet.NumberU8,
+		Packet.String
 	),
 }

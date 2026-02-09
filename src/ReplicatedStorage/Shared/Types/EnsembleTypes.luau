@@ -39,6 +39,11 @@ export type StatConfig = {
 	},
 }
 
+export type HotbarConfig = {
+	SlotCount: number?,
+	Loadout: { [number]: string }?,
+}
+
 export type EventBus = {
 	Subscribe: (self: EventBus, EventName: string, Callback: (...any) -> ()) -> Connection,
 	SubscribeOnce: (self: EventBus, EventName: string, Callback: (...any) -> ()) -> Connection,

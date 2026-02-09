@@ -39,12 +39,29 @@ export type StatConfig = {
 	},
 }
 
+export type HotbarConfig = {
+	SlotCount: number?,
+	Loadout: { [number]: string }?,
+}
+
+export type EventBus = {
+	Subscribe: (self: EventBus, EventName: string, Callback: (...any) -> ()) -> Connection,
+	SubscribeOnce: (self: EventBus, EventName: string, Callback: (...any) -> ()) -> Connection,
+	Publish: (self: EventBus, EventName: string, ...any) -> (),
+	Wait: (self: EventBus, EventName: string) -> ...any,
+	Clear: (self: EventBus, EventName: string?) -> (),
+	HasEvent: (self: EventBus, EventName: string) -> boolean,
+	GetEventNames: (self: EventBus) -> { string },
+	Destroy: (self: EventBus) -> (),
+}
+
 export type EntityContext = {
 	Player: Player?,
 	Data: { [string]: any }?,
 	EventBus: EventBus?,
 	StateConfig: StateConfig?,
 	StatConfig: StatConfig?,
+	HotbarConfig: HotbarConfig?,
 }
 
 export type Component = {
@@ -82,17 +99,6 @@ export type EntityBuilder = {
 	WithArchetype: (self: EntityBuilder, ArchetypeName: string) -> EntityBuilder,
 	WithoutComponent: (self: EntityBuilder, ComponentName: string) -> EntityBuilder,
 	Build: (self: EntityBuilder) -> Entity,
-}
-
-export type EventBus = {
-	Subscribe: (self: EventBus, EventName: string, Callback: (...any) -> ()) -> Connection,
-	SubscribeOnce: (self: EventBus, EventName: string, Callback: (...any) -> ()) -> Connection,
-	Publish: (self: EventBus, EventName: string, ...any) -> (),
-	Wait: (self: EventBus, EventName: string) -> ...any,
-	Clear: (self: EventBus, EventName: string?) -> (),
-	HasEvent: (self: EventBus, EventName: string) -> boolean,
-	GetEventNames: (self: EventBus) -> { string },
-	Destroy: (self: EventBus) -> (),
 }
 
 return Types
