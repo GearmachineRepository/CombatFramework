@@ -27,19 +27,27 @@ local SourceSlotFrame: Frame? = nil
 local GhostGui: ScreenGui? = nil
 local GhostFrame: Frame? = nil
 
-local GHOST_TRANSPARENCY = 0.4
+local GHOST_TRANSPARENCY = 0
 local DRAG_THRESHOLD = 0
 
 local DragStartPosition: Vector2? = nil
 local DragConfirmed = false
 local DidPredict = false
 
---- Returns the current cursor position.
+--[=[
+	Returns the current cursor position.
+
+	@return Vector2 -- The screen position of the cursor
+]=]
 local function GetCursorPosition(): Vector2
 	return UserInputService:GetMouseLocation()
 end
 
---- Creates the ScreenGui used to display the drag ghost above all other UI.
+--[=[
+	Creates the ScreenGui used to display the drag ghost above all other UI.
+
+	@return ScreenGui -- The newly created ghost ScreenGui
+]=]
 local function CreateGhostGui(): ScreenGui
 	local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
@@ -53,7 +61,12 @@ local function CreateGhostGui(): ScreenGui
 	return ScreenGui
 end
 
---- Clones the source frame as a semi-transparent ghost for dragging.
+--[=[
+	Clones the source frame as a semi-transparent ghost for dragging.
+
+	@param SourceFrame Frame -- The slot frame to clone
+	@return Frame -- The ghost clone with transparency applied
+]=]
 local function CreateGhostFrame(SourceFrame: Frame): Frame
 	local Clone = SourceFrame:Clone()
 	Clone.Name = "GhostSlot"
@@ -93,7 +106,11 @@ local function CreateGhostFrame(SourceFrame: Frame): Frame
 	return Clone
 end
 
---- Moves the ghost frame to follow the cursor.
+--[=[
+	Moves the ghost frame to follow the cursor.
+
+	@param Position Vector2 -- The screen position to move to
+]=]
 local function UpdateGhostPosition(Position: Vector2)
 	if not GhostFrame then
 		return
@@ -102,8 +119,10 @@ local function UpdateGhostPosition(Position: Vector2)
 	GhostFrame.Position = UDim2.fromOffset(Position.X, Position.Y)
 end
 
---- Hides the source slot during a drag. Grids show the empty content
---- frame underneath, lists hide the slot entirely so the layout reflows.
+--[=[
+	Hides the source slot during a drag. Grids show the empty content
+	frame underneath, lists hide the slot entirely so the layout reflows.
+]=]
 local function HideSourceSlot()
 	if not SourceSlotFrame or not SourceInventoryName then
 		return
@@ -125,8 +144,10 @@ local function HideSourceSlot()
 	end
 end
 
---- Restores source slot visibility when a drag is cancelled without
---- a successful drop. Only called when no prediction was applied.
+--[=[
+	Restores source slot visibility when a drag is cancelled without
+	a successful drop. Only called when no prediction was applied.
+]=]
 local function RestoreSourceSlot()
 	if not SourceSlotFrame or not SourceInventoryName then
 		return
@@ -148,7 +169,9 @@ local function RestoreSourceSlot()
 	end
 end
 
---- Confirms the drag visually: shows the ghost and hides the source slot.
+--[=[
+	Confirms the drag visually: shows the ghost and hides the source slot.
+]=]
 local function ConfirmDrag()
 	if DragConfirmed then
 		return
@@ -163,8 +186,14 @@ local function ConfirmDrag()
 	HideSourceSlot()
 end
 
---- Begins tracking a drag from the given slot. If the threshold is zero,
---- the drag is confirmed immediately so the source hides on press.
+--[=[
+	Begins tracking a drag from the given slot. If the threshold is zero,
+	the drag is confirmed immediately so the source hides on press.
+
+	@param SlotFrame Frame -- The UI frame of the slot being dragged
+	@param InventoryName string -- Name of the inventory the slot belongs to
+	@param SlotIndex number -- Index of the slot being dragged
+]=]
 local function StartDrag(SlotFrame: Frame, InventoryName: string, SlotIndex: number)
 	if IsDragging then
 		return
@@ -203,10 +232,14 @@ local function StartDrag(SlotFrame: Frame, InventoryName: string, SlotIndex: num
 	end
 end
 
---- Resolves a completed drag by predicting the result locally then
---- sending the request to the server. Prediction mutates client
---- inventory data and fires SlotUpdated, so the UI refreshes instantly.
---- Server sync arrives later with the same data — no flicker.
+--[=[
+	Resolves a completed drag by predicting the result locally then
+	sending the request to the server. Prediction mutates client
+	inventory data and fires SlotUpdated, so the UI refreshes instantly.
+	Server sync arrives later with the authoritative data.
+
+	@param DropPosition Vector2 -- The screen position where the drag ended
+]=]
 local function ResolveDrop(DropPosition: Vector2)
 	if not IsDragging or not SourceInventoryName or not SourceSlotIndex then
 		return
@@ -241,7 +274,7 @@ local function ResolveDrop(DropPosition: Vector2)
 		local SourceContainerType = UIInventoryController.GetContainerType(SourceInventoryName)
 
 		if TargetContainerType == "List" and TargetInventoryName ~= SourceInventoryName then
-			InventoryController.PredictSourceClear(SourceInventoryName, SourceSlotIndex)
+			InventoryController.PredictDeposit(SourceInventoryName, SourceSlotIndex, TargetInventoryName)
 			DidPredict = true
 			InventoryController.RequestDeposit(
 				SourceInventoryName,
@@ -249,7 +282,7 @@ local function ResolveDrop(DropPosition: Vector2)
 				TargetInventoryName
 			)
 		elseif SourceContainerType == "List" and TargetInventoryName ~= SourceInventoryName then
-			InventoryController.PredictTransfer(SourceInventoryName, SourceSlotIndex, TargetInventoryName, TargetSlotIndex)
+			InventoryController.PredictTransferAndDeposit(SourceInventoryName, SourceSlotIndex, TargetInventoryName, TargetSlotIndex)
 			DidPredict = true
 			InventoryController.RequestTransferAndDeposit(
 				SourceInventoryName,
@@ -286,7 +319,7 @@ local function ResolveDrop(DropPosition: Vector2)
 			return
 		end
 
-		InventoryController.PredictSourceClear(SourceInventoryName, SourceSlotIndex)
+		InventoryController.PredictDeposit(SourceInventoryName, SourceSlotIndex, ContainerInventoryName)
 		DidPredict = true
 		InventoryController.RequestDeposit(
 			SourceInventoryName,
@@ -297,10 +330,12 @@ local function ResolveDrop(DropPosition: Vector2)
 	end
 end
 
---- Cleans up all drag state. If no prediction was applied (drag was
---- cancelled or dropped on nothing), restores the source slot visually.
---- If a prediction was applied, the data is already correct so no
---- restoration is needed.
+--[=[
+	Cleans up all drag state. If no prediction was applied (drag was
+	cancelled or dropped on nothing), restores the source slot visually.
+	If a prediction was applied, the data is already correct so no
+	restoration is needed.
+]=]
 local function CancelDrag()
 	if not IsDragging then
 		return
@@ -326,8 +361,12 @@ local function CancelDrag()
 	GhostFrame = nil
 end
 
---- Finalizes a drag on mouse/touch release. Resolves the drop if
---- the drag was confirmed, then cleans up.
+--[=[
+	Finalizes a drag on mouse/touch release. Resolves the drop if
+	the drag was confirmed, then cleans up.
+
+	@param DropPosition Vector2 -- The screen position where the input ended
+]=]
 local function EndDrag(DropPosition: Vector2)
 	if not IsDragging then
 		return
@@ -425,12 +464,21 @@ function DragController.Stop()
 	GhostGui = nil
 end
 
---- Returns whether a drag is currently active.
+--[=[
+	Returns whether a drag is currently active.
+
+	@return boolean -- True if a drag is in progress
+]=]
 function DragController.IsDragging(): boolean
 	return IsDragging
 end
 
---- Returns the inventory name and slot index of the current drag source.
+--[=[
+	Returns the inventory name and slot index of the current drag source.
+
+	@return string? -- The source inventory name, or nil
+	@return number? -- The source slot index, or nil
+]=]
 function DragController.GetDragSource(): (string?, number?)
 	return SourceInventoryName, SourceSlotIndex
 end

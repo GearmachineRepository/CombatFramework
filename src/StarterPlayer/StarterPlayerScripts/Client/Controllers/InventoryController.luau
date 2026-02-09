@@ -232,6 +232,16 @@ function InventoryController.GetEmptySlotCount(InventoryName: string): number
 	return MaxSlots - Filled
 end
 
+--[=[
+	Predicts a slot-to-slot transfer locally. Mutates client inventory data
+	and fires SlotUpdated for both source and target so the UI refreshes
+	instantly before the server round-trip completes.
+
+	@param SourceInventoryName string -- Name of the source inventory
+	@param SourceIndex number -- Slot index in the source inventory
+	@param TargetInventoryName string -- Name of the target inventory
+	@param TargetIndex number -- Slot index in the target inventory
+]=]
 function InventoryController.PredictTransfer(
 	SourceInventoryName: string,
 	SourceIndex: number,
@@ -259,6 +269,14 @@ function InventoryController.PredictTransfer(
 	end
 end
 
+--[=[
+	Predicts clearing a single source slot locally. Used when the full
+	target-side prediction is not feasible and only the source removal
+	needs to be shown immediately.
+
+	@param InventoryName string -- Name of the inventory containing the slot
+	@param SlotIndex number -- Slot index to clear
+]=]
 function InventoryController.PredictSourceClear(
 	InventoryName: string,
 	SlotIndex: number
@@ -275,6 +293,172 @@ function InventoryController.PredictSourceClear(
 
 	TargetInventory[SlotIndex] = nil
 	InventoryController.SlotUpdated:Fire(InventoryName, SlotIndex, nil, OldStack)
+end
+
+--[=[
+	Predicts a deposit operation locally. Clears the source slot and runs
+	AddItem on the target inventory, firing SlotUpdated for all affected
+	slots so the UI updates on both sides without waiting for the server.
+
+	@param SourceInventoryName string -- Name of the source inventory
+	@param SourceIndex number -- Slot index being deposited from
+	@param TargetInventoryName string -- Name of the target inventory
+]=]
+function InventoryController.PredictDeposit(
+	SourceInventoryName: string,
+	SourceIndex: number,
+	TargetInventoryName: string
+)
+	local SourceInventory = Inventories[SourceInventoryName]
+	local TargetInventory = Inventories[TargetInventoryName]
+	if not SourceInventory or not TargetInventory then
+		return
+	end
+
+	local SourceStack = SourceInventory[SourceIndex]
+	if not SourceStack then
+		return
+	end
+
+	local TargetMaxSlots = GetMaxSlots(TargetInventoryName)
+
+	local SlotsBefore: { [number]: ItemStack? } = {}
+	for Index = 1, TargetMaxSlots do
+		local Stack = TargetInventory[Index]
+		if Stack then
+			SlotsBefore[Index] = { ItemId = Stack.ItemId, Quantity = Stack.Quantity, Metadata = Stack.Metadata }
+		end
+	end
+
+	local OldSource = SourceStack
+	SourceInventory[SourceIndex] = nil
+
+	local Overflow = InventoryUtil.AddItem(
+		TargetInventory,
+		SourceStack.ItemId,
+		SourceStack.Quantity,
+		TargetMaxSlots,
+		SourceStack.Metadata
+	)
+
+	if Overflow > 0 then
+		SourceInventory[SourceIndex] = {
+			ItemId = SourceStack.ItemId,
+			Quantity = Overflow,
+			Metadata = SourceStack.Metadata,
+		}
+	end
+
+	InventoryController.SlotUpdated:Fire(SourceInventoryName, SourceIndex, SourceInventory[SourceIndex], OldSource)
+
+	for Index = 1, TargetMaxSlots do
+		local Before = SlotsBefore[Index]
+		local After = TargetInventory[Index]
+
+		local Changed =
+			(Before == nil and After ~= nil)
+			or (
+				Before ~= nil
+				and After ~= nil
+				and Before.Quantity ~= After.Quantity
+			)
+
+		if Changed then
+			InventoryController.SlotUpdated:Fire(TargetInventoryName, Index, After, Before)
+		end
+	end
+end
+
+--[=[
+	Predicts a transfer-and-deposit operation locally. Mirrors the server
+	logic: if the target slot is empty or stackable, delegates to
+	PredictTransfer. Otherwise places the source item in the target slot
+	and redistributes the displaced stack into the source inventory via
+	AddItem, firing SlotUpdated for all affected slots.
+
+	@param SourceInventoryName string -- Name of the source inventory
+	@param SourceIndex number -- Slot index in the source inventory
+	@param TargetInventoryName string -- Name of the target inventory
+	@param TargetIndex number -- Slot index in the target inventory
+]=]
+function InventoryController.PredictTransferAndDeposit(
+	SourceInventoryName: string,
+	SourceIndex: number,
+	TargetInventoryName: string,
+	TargetIndex: number
+)
+	local SourceInventory = Inventories[SourceInventoryName]
+	local TargetInventory = Inventories[TargetInventoryName]
+	if not SourceInventory or not TargetInventory then
+		return
+	end
+
+	local SourceStack = SourceInventory[SourceIndex]
+	if not SourceStack then
+		return
+	end
+
+	local DisplacedStack = TargetInventory[TargetIndex]
+
+	if not DisplacedStack or DisplacedStack.ItemId == SourceStack.ItemId then
+		InventoryController.PredictTransfer(SourceInventoryName, SourceIndex, TargetInventoryName, TargetIndex)
+		return
+	end
+
+	local SourceMaxSlots = GetMaxSlots(SourceInventoryName)
+
+	local SourceSlotsBefore: { [number]: ItemStack? } = {}
+	for Index = 1, SourceMaxSlots do
+		local Stack = SourceInventory[Index]
+		if Stack then
+			SourceSlotsBefore[Index] = { ItemId = Stack.ItemId, Quantity = Stack.Quantity, Metadata = Stack.Metadata }
+		end
+	end
+
+	local OldTarget = DisplacedStack
+
+	SourceInventory[SourceIndex] = nil
+	TargetInventory[TargetIndex] = SourceStack
+
+	local Overflow = InventoryUtil.AddItem(
+		SourceInventory,
+		DisplacedStack.ItemId,
+		DisplacedStack.Quantity,
+		SourceMaxSlots,
+		DisplacedStack.Metadata
+	)
+
+	if Overflow > 0 then
+		SourceInventory[SourceIndex] = {
+			ItemId = DisplacedStack.ItemId,
+			Quantity = Overflow,
+			Metadata = DisplacedStack.Metadata,
+		}
+	end
+
+	for Index = 1, SourceMaxSlots do
+		local Before = SourceSlotsBefore[Index]
+		local After = SourceInventory[Index]
+
+		local Changed =
+			(Before == nil and After ~= nil)
+			or (Before ~= nil and After == nil)
+			or (
+				Before ~= nil
+				and After ~= nil
+				and (
+					Before.ItemId ~= After.ItemId
+					or Before.Quantity ~= After.Quantity
+				)
+			)
+
+
+		if Changed then
+			InventoryController.SlotUpdated:Fire(SourceInventoryName, Index, After, Before)
+		end
+	end
+
+	InventoryController.SlotUpdated:Fire(TargetInventoryName, TargetIndex, TargetInventory[TargetIndex], OldTarget)
 end
 
 return InventoryController

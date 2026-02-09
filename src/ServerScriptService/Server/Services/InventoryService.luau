@@ -147,9 +147,18 @@ function InventoryService.Start()
 		if typeof(TargetIndex) ~= "number" then return end
 		if not IsValidInventoryName(SourceInventory) then return end
 		if not IsValidInventoryName(TargetInventory) then return end
-		if not InventoryActionLimiter.Consume(GetPlayerRateKey(Player)) then return end
 
-		InventoryService.TransferSlot(Player, SourceInventory, SourceIndex, TargetInventory, TargetIndex)
+		if not InventoryActionLimiter.Consume(GetPlayerRateKey(Player)) then
+			SyncSlot(Player, SourceInventory, SourceIndex)
+			SyncSlot(Player, TargetInventory, TargetIndex)
+			return
+		end
+
+		local Success = InventoryService.TransferSlot(Player, SourceInventory, SourceIndex, TargetInventory, TargetIndex)
+		if not Success then
+			SyncSlot(Player, SourceInventory, SourceIndex)
+			SyncSlot(Player, TargetInventory, TargetIndex)
+		end
 	end)
 
 	ServiceTrove:Connect(Packets.InventorySwap.OnServerEvent :: any, function(
@@ -165,9 +174,18 @@ function InventoryService.Start()
 		if typeof(TargetIndex) ~= "number" then return end
 		if not IsValidInventoryName(SourceInventory) then return end
 		if not IsValidInventoryName(TargetInventory) then return end
-		if not InventoryActionLimiter.Consume(GetPlayerRateKey(Player)) then return end
 
-		InventoryService.SwapSlots(Player, SourceInventory, SourceIndex, TargetInventory, TargetIndex)
+		if not InventoryActionLimiter.Consume(GetPlayerRateKey(Player)) then
+			SyncSlot(Player, SourceInventory, SourceIndex)
+			SyncSlot(Player, TargetInventory, TargetIndex)
+			return
+		end
+
+		local Success = InventoryService.SwapSlots(Player, SourceInventory, SourceIndex, TargetInventory, TargetIndex)
+		if not Success then
+			SyncSlot(Player, SourceInventory, SourceIndex)
+			SyncSlot(Player, TargetInventory, TargetIndex)
+		end
 	end)
 
 	ServiceTrove:Connect(Packets.InventoryDrop.OnServerEvent :: any, function(
@@ -180,9 +198,16 @@ function InventoryService.Start()
 		if typeof(SlotIndex) ~= "number" then return end
 		if typeof(Quantity) ~= "number" then return end
 		if not IsValidInventoryName(InventoryName) then return end
-		if not InventoryActionLimiter.Consume(GetPlayerRateKey(Player)) then return end
 
-		InventoryService.DropItem(Player, InventoryName, SlotIndex, Quantity)
+		if not InventoryActionLimiter.Consume(GetPlayerRateKey(Player)) then
+			SyncSlot(Player, InventoryName, SlotIndex)
+			return
+		end
+
+		local Success = InventoryService.DropItem(Player, InventoryName, SlotIndex, Quantity)
+		if not Success then
+			SyncSlot(Player, InventoryName, SlotIndex)
+		end
 	end)
 
 	ServiceTrove:Connect(Packets.InventoryDeposit.OnServerEvent :: any, function(
@@ -196,9 +221,18 @@ function InventoryService.Start()
 		if typeof(TargetInventory) ~= "string" then return end
 		if not IsValidInventoryName(SourceInventory) then return end
 		if not IsValidInventoryName(TargetInventory) then return end
-		if not InventoryActionLimiter.Consume(GetPlayerRateKey(Player)) then return end
 
-		InventoryService.DepositSlot(Player, SourceInventory, SourceIndex, TargetInventory)
+		if not InventoryActionLimiter.Consume(GetPlayerRateKey(Player)) then
+			SyncSlot(Player, SourceInventory, SourceIndex)
+			SyncInventory(Player, TargetInventory)
+			return
+		end
+
+		local Success = InventoryService.DepositSlot(Player, SourceInventory, SourceIndex, TargetInventory)
+		if not Success then
+			SyncSlot(Player, SourceInventory, SourceIndex)
+			SyncInventory(Player, TargetInventory)
+		end
 	end)
 
 	ServiceTrove:Connect(Packets.InventoryTransferDeposit.OnServerEvent :: any, function(
@@ -214,9 +248,18 @@ function InventoryService.Start()
 		if typeof(TargetIndex) ~= "number" then return end
 		if not IsValidInventoryName(SourceInventory) then return end
 		if not IsValidInventoryName(TargetInventory) then return end
-		if not InventoryActionLimiter.Consume(GetPlayerRateKey(Player)) then return end
 
-		InventoryService.TransferAndDeposit(Player, SourceInventory, SourceIndex, TargetInventory, TargetIndex)
+		if not InventoryActionLimiter.Consume(GetPlayerRateKey(Player)) then
+			SyncInventory(Player, SourceInventory)
+			SyncSlot(Player, TargetInventory, TargetIndex)
+			return
+		end
+
+		local Success = InventoryService.TransferAndDeposit(Player, SourceInventory, SourceIndex, TargetInventory, TargetIndex)
+		if not Success then
+			SyncInventory(Player, SourceInventory)
+			SyncSlot(Player, TargetInventory, TargetIndex)
+		end
 	end)
 
 	for _, Player in Players:GetPlayers() do
