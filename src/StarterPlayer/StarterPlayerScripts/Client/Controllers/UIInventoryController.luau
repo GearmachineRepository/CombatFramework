@@ -90,19 +90,26 @@ end
 local function SetSlotSelected(SlotFrame: Frame, IsSelected: boolean)
 	SlotFrame:SetAttribute("Selected", IsSelected)
 
-	local SelectionIndicator = SlotFrame:FindFirstChild("SelectionIndicator")
+	local FilledContent = SlotFrame:FindFirstChild("FilledContent")
+	if not FilledContent then
+		return
+	end
+
+	local SelectionIndicator = FilledContent:FindFirstChild("SelectionIndicator")
 	if SelectionIndicator and SelectionIndicator:IsA("GuiObject") then
 		SelectionIndicator.Visible = IsSelected
 	end
 end
 
 local function UpdateSlotDisplay(SlotFrame: Frame, Stack: ItemStack?, InventoryName: string, SlotIndex: number)
-	local Icon = SlotFrame:FindFirstChild("Icon") :: ImageLabel?
-	local TopLabel = SlotFrame:FindFirstChild("TopLabel") :: TextLabel?
-	local BottomLabel = SlotFrame:FindFirstChild("BottomLabel") :: TextLabel?
-	local ItemNameLabel = SlotFrame:FindFirstChild("ItemName") :: TextLabel?
-
+	local FilledContent = SlotFrame:FindFirstChild("FilledContent") :: Frame?
+	local EmptyContent = SlotFrame:FindFirstChild("EmptyContent") :: Frame?
 	local IsHotbar = InventoryName == "Hotbar"
+
+	local Icon = if FilledContent then FilledContent:FindFirstChild("Icon") :: ImageLabel? else nil
+	local TopLabel = if FilledContent then FilledContent:FindFirstChild("TopLabel") :: TextLabel? else nil
+	local BottomLabel = if FilledContent then FilledContent:FindFirstChild("BottomLabel") :: TextLabel? else nil
+	local ItemNameLabel = if FilledContent then FilledContent:FindFirstChild("ItemName") :: TextLabel? else nil
 
 	if TopLabel then
 		if IsHotbar then
@@ -115,6 +122,13 @@ local function UpdateSlotDisplay(SlotFrame: Frame, Stack: ItemStack?, InventoryN
 	end
 
 	if not Stack then
+		if FilledContent then
+			FilledContent.Visible = false
+		end
+		if EmptyContent then
+			EmptyContent.Visible = true
+		end
+
 		if IsHotbar and not IsInventoryOpen then
 			SlotFrame.Visible = false
 		elseif IsHotbar and IsInventoryOpen then
@@ -142,6 +156,13 @@ local function UpdateSlotDisplay(SlotFrame: Frame, Stack: ItemStack?, InventoryN
 	end
 
 	SlotFrame.Visible = true
+
+	if FilledContent then
+		FilledContent.Visible = true
+	end
+	if EmptyContent then
+		EmptyContent.Visible = false
+	end
 
 	local ItemDef = ItemDatabase.Get(Stack.ItemId)
 

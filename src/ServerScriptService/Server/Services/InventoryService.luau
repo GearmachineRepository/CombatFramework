@@ -13,6 +13,7 @@ local InventoryTypes = require(Shared.Types.InventoryTypes)
 local InventoryConfig = require(Shared.Config.InventoryConfig)
 local InventoryUtil = require(Shared.Utils.InventoryUtil)
 local ItemDatabase = require(Shared.Data.ItemDatabase)
+local RateLimiter = require(Shared.Utils.RateLimiter)
 
 local Signal = Packages.Signal
 local Trove = Packages.Trove
@@ -42,6 +43,20 @@ local RuntimeInventories: {
 		AllowedTypes: { string }?,
 	},
 } = {}
+
+local InventoryActionLimiter = RateLimiter.Create({
+	MaxTokens = 10,
+	RefillRate = 5,
+	RefillInterval = 1,
+})
+
+local function IsValidInventoryName(InventoryName: string): boolean
+	return InventoryConfig[InventoryName] ~= nil
+end
+
+local function GetPlayerRateKey(Player: Player): string
+	return tostring(Player.UserId)
+end
 
 local function GetInventoryRule(InventoryName: string): InventoryRule?
 	return InventoryConfig[InventoryName]
@@ -112,6 +127,7 @@ end
 function InventoryService.Start()
 	ServiceTrove:Add(Players.PlayerRemoving:Connect(function(Player: Player)
 		InventoryService.CleanupPlayerRuntimeInventories(Player)
+		InventoryActionLimiter.Reset(GetPlayerRateKey(Player))
 	end))
 
 	ServiceTrove:Connect(PlayerDataService.ProfileLoaded :: any, function(Player: Player, _Data: any)
@@ -129,6 +145,9 @@ function InventoryService.Start()
 		if typeof(SourceIndex) ~= "number" then return end
 		if typeof(TargetInventory) ~= "string" then return end
 		if typeof(TargetIndex) ~= "number" then return end
+		if not IsValidInventoryName(SourceInventory) then return end
+		if not IsValidInventoryName(TargetInventory) then return end
+		if not InventoryActionLimiter.Consume(GetPlayerRateKey(Player)) then return end
 
 		InventoryService.TransferSlot(Player, SourceInventory, SourceIndex, TargetInventory, TargetIndex)
 	end)
@@ -144,6 +163,9 @@ function InventoryService.Start()
 		if typeof(SourceIndex) ~= "number" then return end
 		if typeof(TargetInventory) ~= "string" then return end
 		if typeof(TargetIndex) ~= "number" then return end
+		if not IsValidInventoryName(SourceInventory) then return end
+		if not IsValidInventoryName(TargetInventory) then return end
+		if not InventoryActionLimiter.Consume(GetPlayerRateKey(Player)) then return end
 
 		InventoryService.SwapSlots(Player, SourceInventory, SourceIndex, TargetInventory, TargetIndex)
 	end)
@@ -157,6 +179,8 @@ function InventoryService.Start()
 		if typeof(InventoryName) ~= "string" then return end
 		if typeof(SlotIndex) ~= "number" then return end
 		if typeof(Quantity) ~= "number" then return end
+		if not IsValidInventoryName(InventoryName) then return end
+		if not InventoryActionLimiter.Consume(GetPlayerRateKey(Player)) then return end
 
 		InventoryService.DropItem(Player, InventoryName, SlotIndex, Quantity)
 	end)
@@ -170,6 +194,9 @@ function InventoryService.Start()
 		if typeof(SourceInventory) ~= "string" then return end
 		if typeof(SourceIndex) ~= "number" then return end
 		if typeof(TargetInventory) ~= "string" then return end
+		if not IsValidInventoryName(SourceInventory) then return end
+		if not IsValidInventoryName(TargetInventory) then return end
+		if not InventoryActionLimiter.Consume(GetPlayerRateKey(Player)) then return end
 
 		InventoryService.DepositSlot(Player, SourceInventory, SourceIndex, TargetInventory)
 	end)
@@ -185,6 +212,9 @@ function InventoryService.Start()
 		if typeof(SourceIndex) ~= "number" then return end
 		if typeof(TargetInventory) ~= "string" then return end
 		if typeof(TargetIndex) ~= "number" then return end
+		if not IsValidInventoryName(SourceInventory) then return end
+		if not IsValidInventoryName(TargetInventory) then return end
+		if not InventoryActionLimiter.Consume(GetPlayerRateKey(Player)) then return end
 
 		InventoryService.TransferAndDeposit(Player, SourceInventory, SourceIndex, TargetInventory, TargetIndex)
 	end)
@@ -198,6 +228,7 @@ end
 
 function InventoryService.Stop()
 	ServiceTrove:Destroy()
+	InventoryActionLimiter.Destroy()
 	table.clear(RuntimeInventories)
 end
 
@@ -237,14 +268,36 @@ function InventoryService.AddItem(
 	end
 
 	local MaxSlots = GetMaxSlots(InventoryName)
+
+	local SlotsBefore: { [number]: ItemStack? } = {}
+	for Index = 1, MaxSlots do
+		local Stack = TargetInventory[Index]
+		if Stack then
+			SlotsBefore[Index] = { ItemId = Stack.ItemId, Quantity = Stack.Quantity, Metadata = Stack.Metadata }
+		end
+	end
+
 	local Overflow = InventoryUtil.AddItem(TargetInventory, ItemId, Quantity, MaxSlots, TargetMetadata)
 	local Added = Quantity - Overflow
 
 	if Added > 0 then
+		for Index = 1, MaxSlots do
+			local Before = SlotsBefore[Index]
+			local After = TargetInventory[Index]
+
+			local Changed = false
+			if (Before == nil and After ~= nil) or (Before ~= nil and After ~= nil and Before.Quantity ~= After.Quantity) then
+				Changed = true
+			end
+
+			if Changed then
+				SyncSlot(Player, InventoryName, Index)
+			end
+		end
+
 		InventoryService.ItemAdded:Fire(Player, InventoryName, ItemId, Added, TargetMetadata)
 		InventoryService.InventoryChanged:Fire(Player, InventoryName)
 
-		SyncInventory(Player, InventoryName)
 		Packets.InventoryItemAdded:FireClient(Player, InventoryName, ItemId, Added)
 	end
 
@@ -264,13 +317,30 @@ function InventoryService.RemoveItem(
 	end
 
 	local MaxSlots = GetMaxSlots(InventoryName)
+
+	local SlotsBefore: { [number]: number } = {}
+	for Index = 1, MaxSlots do
+		local Stack = TargetInventory[Index]
+		if Stack and Stack.ItemId == ItemId then
+			SlotsBefore[Index] = Stack.Quantity
+		end
+	end
+
 	local Removed = InventoryUtil.RemoveItem(TargetInventory, ItemId, Quantity, MaxSlots, TargetMetadata)
 
 	if Removed > 0 then
+		for Index, OldQuantity in SlotsBefore do
+			local After = TargetInventory[Index]
+			local NewQuantity = if After then After.Quantity else 0
+
+			if NewQuantity ~= OldQuantity then
+				SyncSlot(Player, InventoryName, Index)
+			end
+		end
+
 		InventoryService.ItemRemoved:Fire(Player, InventoryName, ItemId, Removed, TargetMetadata)
 		InventoryService.InventoryChanged:Fire(Player, InventoryName)
 
-		SyncInventory(Player, InventoryName)
 		Packets.InventoryItemRemoved:FireClient(Player, InventoryName, ItemId, Removed)
 	end
 
@@ -574,6 +644,8 @@ function InventoryService.TransferAndDeposit(
 			Quantity = Overflow,
 			Metadata = DisplacedStack.Metadata,
 		}
+	else
+		SourceInventory[SourceIndex] = nil
 	end
 
 	InventoryService.SlotChanged:Fire(Player, SourceInventoryName, SourceIndex, SourceInventory[SourceIndex], SourceStack)

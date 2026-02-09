@@ -22,20 +22,24 @@ local DragTrove: typeof(Trove.new()) = nil :: any
 local IsDragging = false
 local SourceInventoryName: string? = nil
 local SourceSlotIndex: number? = nil
+local SourceSlotFrame: Frame? = nil
 
 local GhostGui: ScreenGui? = nil
 local GhostFrame: Frame? = nil
 
 local GHOST_TRANSPARENCY = 0.4
-local DRAG_THRESHOLD = 4
+local DRAG_THRESHOLD = 0
 
 local DragStartPosition: Vector2? = nil
 local DragConfirmed = false
+local DidPredict = false
 
+--- Returns the current cursor position.
 local function GetCursorPosition(): Vector2
 	return UserInputService:GetMouseLocation()
 end
 
+--- Creates the ScreenGui used to display the drag ghost above all other UI.
 local function CreateGhostGui(): ScreenGui
 	local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
@@ -49,6 +53,7 @@ local function CreateGhostGui(): ScreenGui
 	return ScreenGui
 end
 
+--- Clones the source frame as a semi-transparent ghost for dragging.
 local function CreateGhostFrame(SourceFrame: Frame): Frame
 	local Clone = SourceFrame:Clone()
 	Clone.Name = "GhostSlot"
@@ -58,7 +63,7 @@ local function CreateGhostFrame(SourceFrame: Frame): Frame
 
 	for _, Child in Clone:GetDescendants() do
 		if Child:IsA("GuiButton") or Child:IsA("TextButton") or Child:IsA("ImageButton") then
-			Child.Active = false
+			(Child :: GuiButton).Active = false
 		end
 	end
 
@@ -88,6 +93,7 @@ local function CreateGhostFrame(SourceFrame: Frame): Frame
 	return Clone
 end
 
+--- Moves the ghost frame to follow the cursor.
 local function UpdateGhostPosition(Position: Vector2)
 	if not GhostFrame then
 		return
@@ -96,6 +102,69 @@ local function UpdateGhostPosition(Position: Vector2)
 	GhostFrame.Position = UDim2.fromOffset(Position.X, Position.Y)
 end
 
+--- Hides the source slot during a drag. Grids show the empty content
+--- frame underneath, lists hide the slot entirely so the layout reflows.
+local function HideSourceSlot()
+	if not SourceSlotFrame or not SourceInventoryName then
+		return
+	end
+
+	local ContainerType = UIInventoryController.GetContainerType(SourceInventoryName)
+
+	if ContainerType == "Grid" then
+		local FilledContent = SourceSlotFrame:FindFirstChild("FilledContent")
+		local EmptyContent = SourceSlotFrame:FindFirstChild("EmptyContent")
+		if FilledContent and FilledContent:IsA("GuiObject") then
+			FilledContent.Visible = false
+		end
+		if EmptyContent and EmptyContent:IsA("GuiObject") then
+			EmptyContent.Visible = true
+		end
+	else
+		SourceSlotFrame.Visible = false
+	end
+end
+
+--- Restores source slot visibility when a drag is cancelled without
+--- a successful drop. Only called when no prediction was applied.
+local function RestoreSourceSlot()
+	if not SourceSlotFrame or not SourceInventoryName then
+		return
+	end
+
+	local ContainerType = UIInventoryController.GetContainerType(SourceInventoryName)
+
+	if ContainerType == "Grid" then
+		local FilledContent = SourceSlotFrame:FindFirstChild("FilledContent")
+		local EmptyContent = SourceSlotFrame:FindFirstChild("EmptyContent")
+		if FilledContent and FilledContent:IsA("GuiObject") then
+			FilledContent.Visible = true
+		end
+		if EmptyContent and EmptyContent:IsA("GuiObject") then
+			EmptyContent.Visible = false
+		end
+	else
+		SourceSlotFrame.Visible = true
+	end
+end
+
+--- Confirms the drag visually: shows the ghost and hides the source slot.
+local function ConfirmDrag()
+	if DragConfirmed then
+		return
+	end
+
+	DragConfirmed = true
+
+	if GhostFrame then
+		GhostFrame.Visible = true
+	end
+
+	HideSourceSlot()
+end
+
+--- Begins tracking a drag from the given slot. If the threshold is zero,
+--- the drag is confirmed immediately so the source hides on press.
 local function StartDrag(SlotFrame: Frame, InventoryName: string, SlotIndex: number)
 	if IsDragging then
 		return
@@ -109,21 +178,35 @@ local function StartDrag(SlotFrame: Frame, InventoryName: string, SlotIndex: num
 	IsDragging = true
 	SourceInventoryName = InventoryName
 	SourceSlotIndex = SlotIndex
+	SourceSlotFrame = SlotFrame
 
 	DragTrove = ControllerTrove:Extend()
 
 	if not GhostGui then
 		GhostGui = CreateGhostGui()
-		ControllerTrove:Add(GhostGui)
+		if GhostGui then
+			ControllerTrove:Add(GhostGui)
+		end
 	end
 
 	GhostFrame = CreateGhostFrame(SlotFrame)
-	GhostFrame.Parent = GhostGui
-	DragTrove:Add(GhostFrame)
+	if GhostFrame then
+		GhostFrame.Visible = false
+		GhostFrame.Parent = GhostGui
+		DragTrove:Add(GhostFrame)
+	end
 
 	UpdateGhostPosition(GetCursorPosition())
+
+	if DRAG_THRESHOLD <= 0 then
+		ConfirmDrag()
+	end
 end
 
+--- Resolves a completed drag by predicting the result locally then
+--- sending the request to the server. Prediction mutates client
+--- inventory data and fires SlotUpdated, so the UI refreshes instantly.
+--- Server sync arrives later with the same data — no flicker.
 local function ResolveDrop(DropPosition: Vector2)
 	if not IsDragging or not SourceInventoryName or not SourceSlotIndex then
 		return
@@ -140,16 +223,34 @@ local function ResolveDrop(DropPosition: Vector2)
 			return
 		end
 
+		local SourceStack = InventoryController.GetSlot(SourceInventoryName, SourceSlotIndex)
+		if not SourceStack then
+			return
+		end
+
+		if not InventoryController.IsItemTypeAllowed(TargetInventoryName, SourceStack.ItemId) then
+			return
+		end
+
+		local TargetStack = InventoryController.GetSlot(TargetInventoryName, TargetSlotIndex)
+		if TargetStack and not InventoryController.IsItemTypeAllowed(SourceInventoryName, TargetStack.ItemId) then
+			return
+		end
+
 		local TargetContainerType = UIInventoryController.GetContainerType(TargetInventoryName)
 		local SourceContainerType = UIInventoryController.GetContainerType(SourceInventoryName)
 
 		if TargetContainerType == "List" and TargetInventoryName ~= SourceInventoryName then
+			InventoryController.PredictSourceClear(SourceInventoryName, SourceSlotIndex)
+			DidPredict = true
 			InventoryController.RequestDeposit(
 				SourceInventoryName,
 				SourceSlotIndex,
 				TargetInventoryName
 			)
 		elseif SourceContainerType == "List" and TargetInventoryName ~= SourceInventoryName then
+			InventoryController.PredictTransfer(SourceInventoryName, SourceSlotIndex, TargetInventoryName, TargetSlotIndex)
+			DidPredict = true
 			InventoryController.RequestTransferAndDeposit(
 				SourceInventoryName,
 				SourceSlotIndex,
@@ -157,6 +258,8 @@ local function ResolveDrop(DropPosition: Vector2)
 				TargetSlotIndex
 			)
 		else
+			InventoryController.PredictTransfer(SourceInventoryName, SourceSlotIndex, TargetInventoryName, TargetSlotIndex)
+			DidPredict = true
 			InventoryController.RequestTransfer(
 				SourceInventoryName,
 				SourceSlotIndex,
@@ -174,24 +277,46 @@ local function ResolveDrop(DropPosition: Vector2)
 			return
 		end
 
+		local SourceStack = InventoryController.GetSlot(SourceInventoryName, SourceSlotIndex)
+		if not SourceStack then
+			return
+		end
+
+		if not InventoryController.IsItemTypeAllowed(ContainerInventoryName, SourceStack.ItemId) then
+			return
+		end
+
+		InventoryController.PredictSourceClear(SourceInventoryName, SourceSlotIndex)
+		DidPredict = true
 		InventoryController.RequestDeposit(
 			SourceInventoryName,
 			SourceSlotIndex,
 			ContainerInventoryName
 		)
+		return
 	end
 end
 
+--- Cleans up all drag state. If no prediction was applied (drag was
+--- cancelled or dropped on nothing), restores the source slot visually.
+--- If a prediction was applied, the data is already correct so no
+--- restoration is needed.
 local function CancelDrag()
 	if not IsDragging then
 		return
 	end
 
+	if not DidPredict then
+		RestoreSourceSlot()
+	end
+
 	IsDragging = false
 	SourceInventoryName = nil
 	SourceSlotIndex = nil
+	SourceSlotFrame = nil
 	DragStartPosition = nil
 	DragConfirmed = false
+	DidPredict = false
 
 	if DragTrove then
 		DragTrove:Destroy()
@@ -201,6 +326,8 @@ local function CancelDrag()
 	GhostFrame = nil
 end
 
+--- Finalizes a drag on mouse/touch release. Resolves the drop if
+--- the drag was confirmed, then cleans up.
 local function EndDrag(DropPosition: Vector2)
 	if not IsDragging then
 		return
@@ -227,6 +354,10 @@ local function OnInputBegan(InputObject: InputObject, _GameProcessed: boolean)
 	local SlotFrame, InventoryName, SlotIndex = UIInventoryController.GetSlotAtPosition(Position)
 
 	if not SlotFrame or not InventoryName or not SlotIndex then
+		return
+	end
+
+	if InventoryName == "Hotbar" and not UIInventoryController.IsOpen() then
 		return
 	end
 
@@ -258,7 +389,7 @@ local function OnInputChanged(InputObject: InputObject)
 		if Delta < DRAG_THRESHOLD then
 			return
 		end
-		DragConfirmed = true
+		ConfirmDrag()
 	end
 
 	UpdateGhostPosition(GetCursorPosition())
@@ -294,10 +425,12 @@ function DragController.Stop()
 	GhostGui = nil
 end
 
+--- Returns whether a drag is currently active.
 function DragController.IsDragging(): boolean
 	return IsDragging
 end
 
+--- Returns the inventory name and slot index of the current drag source.
 function DragController.GetDragSource(): (string?, number?)
 	return SourceInventoryName, SourceSlotIndex
 end

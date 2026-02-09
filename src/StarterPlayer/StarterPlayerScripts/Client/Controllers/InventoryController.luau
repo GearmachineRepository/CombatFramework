@@ -9,6 +9,7 @@ local Packets = require(Shared.Network.Packets)
 local InventoryTypes = require(Shared.Types.InventoryTypes)
 local InventoryConfig = require(Shared.Config.InventoryConfig)
 local ItemDatabase = require(Shared.Data.ItemDatabase)
+local InventoryUtil = require(Shared.Utils.InventoryUtil)
 
 local Trove = Packages.Trove
 local Signal = Packages.Signal
@@ -112,39 +113,17 @@ function InventoryController.GetItemCount(InventoryName: string, ItemId: string,
 	end
 
 	local MaxSlots = GetMaxSlots(InventoryName)
-	local Total = 0
-
-	for Index = 1, MaxSlots do
-		local Stack = TargetInventory[Index]
-		if not Stack then
-			continue
-		end
-
-		if Stack.ItemId ~= ItemId then
-			continue
-		end
-
-		if TargetMetadata then
-			local Matches = true
-			for Key, Value in TargetMetadata do
-				if not Stack.Metadata or Stack.Metadata[Key] ~= Value then
-					Matches = false
-					break
-				end
-			end
-			if not Matches then
-				continue
-			end
-		end
-
-		Total = Total + Stack.Quantity
-	end
-
-	return Total
+	return InventoryUtil.GetItemCount(TargetInventory, ItemId, MaxSlots, TargetMetadata)
 end
 
 function InventoryController.HasItem(InventoryName: string, ItemId: string, Quantity: number, TargetMetadata: Metadata?): boolean
-	return InventoryController.GetItemCount(InventoryName, ItemId, TargetMetadata) >= Quantity
+	local TargetInventory = Inventories[InventoryName]
+	if not TargetInventory then
+		return false
+	end
+
+	local MaxSlots = GetMaxSlots(InventoryName)
+	return InventoryUtil.HasItem(TargetInventory, ItemId, Quantity, MaxSlots, TargetMetadata)
 end
 
 function InventoryController.RequestTransfer(
@@ -215,6 +194,20 @@ function InventoryController.IsInventoryEmpty(InventoryName: string): boolean
 	return true
 end
 
+function InventoryController.IsItemTypeAllowed(InventoryName: string, ItemId: string): boolean
+	local Rule = InventoryConfig[InventoryName]
+	if not Rule or not Rule.AllowedTypes then
+		return true
+	end
+
+	local ItemType = ItemDatabase.GetItemType(ItemId)
+	if not ItemType then
+		return false
+	end
+
+	return table.find(Rule.AllowedTypes, ItemType) ~= nil
+end
+
 function InventoryController.GetFilledSlotCount(InventoryName: string): number
 	local TargetInventory = Inventories[InventoryName]
 	if not TargetInventory then
@@ -237,6 +230,51 @@ function InventoryController.GetEmptySlotCount(InventoryName: string): number
 	local MaxSlots = GetMaxSlots(InventoryName)
 	local Filled = InventoryController.GetFilledSlotCount(InventoryName)
 	return MaxSlots - Filled
+end
+
+function InventoryController.PredictTransfer(
+	SourceInventoryName: string,
+	SourceIndex: number,
+	TargetInventoryName: string,
+	TargetIndex: number
+)
+	local SourceInventory = Inventories[SourceInventoryName]
+	local TargetInventory = Inventories[TargetInventoryName]
+	if not SourceInventory or not TargetInventory then
+		return
+	end
+
+	local OldSource = SourceInventory[SourceIndex]
+	local OldTarget = TargetInventory[TargetIndex]
+
+	local Success = InventoryUtil.TransferSlot(SourceInventory, SourceIndex, TargetInventory, TargetIndex)
+	if not Success then
+		return
+	end
+
+	InventoryController.SlotUpdated:Fire(SourceInventoryName, SourceIndex, SourceInventory[SourceIndex], OldSource)
+
+	if SourceInventoryName ~= TargetInventoryName or SourceIndex ~= TargetIndex then
+		InventoryController.SlotUpdated:Fire(TargetInventoryName, TargetIndex, TargetInventory[TargetIndex], OldTarget)
+	end
+end
+
+function InventoryController.PredictSourceClear(
+	InventoryName: string,
+	SlotIndex: number
+)
+	local TargetInventory = Inventories[InventoryName]
+	if not TargetInventory then
+		return
+	end
+
+	local OldStack = TargetInventory[SlotIndex]
+	if not OldStack then
+		return
+	end
+
+	TargetInventory[SlotIndex] = nil
+	InventoryController.SlotUpdated:Fire(InventoryName, SlotIndex, nil, OldStack)
 end
 
 return InventoryController
