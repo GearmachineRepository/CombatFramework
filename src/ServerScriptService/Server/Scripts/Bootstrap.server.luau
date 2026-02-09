@@ -23,6 +23,3 @@ Ensemble.Init({
 ServiceLoader.LoadServices(Server.Services)
 ServiceLoader.InitAll()
 ServiceLoader.StartAll()
-
-print("[Server] Bootstrap complete")
-print("[Server] Load order:", table.concat(ServiceLoader.GetLoadOrder(), " -> "))

@@ -13,6 +13,3 @@ local ServiceLoader = require(Shared.Utils.ServiceLoader)
 ServiceLoader.LoadServices(Client.Controllers)
 ServiceLoader.InitAll()
 ServiceLoader.StartAll()
-
-print("[Client] Bootstrap complete")
-print("[Client] Load order:", table.concat(ServiceLoader.GetLoadOrder(), " -> "))

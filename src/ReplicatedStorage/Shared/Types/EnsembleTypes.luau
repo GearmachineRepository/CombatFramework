@@ -61,6 +61,7 @@ export type EntityContext = {
 	EventBus: EventBus?,
 	StateConfig: StateConfig?,
 	StatConfig: StatConfig?,
+	HotbarConfig: HotbarConfig?,
 }
 
 export type Component = {

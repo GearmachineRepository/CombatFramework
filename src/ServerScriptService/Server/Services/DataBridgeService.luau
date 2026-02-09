@@ -1,5 +1,15 @@
 --!strict
 
+--[=[
+	@class DataBridgeService
+
+	Rate-limited bridge for client data requests.
+
+	Allows clients to request whitelisted slices of their player data
+	via a request/response packet pattern. Rate limits are enforced
+	per-player using the shared RateLimiter utility.
+]=]
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
@@ -9,6 +19,7 @@ local Server = ServerScriptService:WaitForChild("Server")
 
 local Packages = require(Shared.Packages)
 local Packets = require(Shared.Network.Packets)
+local RateLimiter = require(Shared.Utils.RateLimiter)
 
 local Trove = Packages.Trove
 local TableUtil = Packages.TableUtil
@@ -27,29 +38,14 @@ local ALLOWED_KEYS: { [string]: boolean } = {
 	Stats = true,
 }
 
-local RATE_LIMIT_INTERVAL = 1
-local MAX_REQUESTS_PER_INTERVAL = 10
+local RequestLimiter = RateLimiter.Create({
+	MaxTokens = 10,
+	RefillRate = 10,
+	RefillInterval = 1,
+})
 
-local RequestCounts: { [Player]: { Count: number, ResetTime: number } } = {}
-
-local function CheckRateLimit(Player: Player): boolean
-	local CurrentTime = os.clock()
-	local PlayerData = RequestCounts[Player]
-
-	if not PlayerData or CurrentTime >= PlayerData.ResetTime then
-		RequestCounts[Player] = {
-			Count = 1,
-			ResetTime = CurrentTime + RATE_LIMIT_INTERVAL,
-		}
-		return true
-	end
-
-	if PlayerData.Count >= MAX_REQUESTS_PER_INTERVAL then
-		return false
-	end
-
-	PlayerData.Count = PlayerData.Count + 1
-	return true
+local function GetPlayerRateKey(Player: Player): string
+	return tostring(Player.UserId)
 end
 
 function DataBridgeService.Init()
@@ -58,15 +54,15 @@ end
 
 function DataBridgeService.Start()
 	ServiceTrove:Connect(Players.PlayerRemoving, function(Player: Player)
-		RequestCounts[Player] = nil
+		RequestLimiter.Reset(GetPlayerRateKey(Player))
 	end)
 
-	ServiceTrove:Add(Packets.FetchData.OnServerEvent:Connect(function(Player: Player, RequestId: any, Key: any)
+	ServiceTrove:Connect(Packets.FetchData.OnServerEvent :: any, function(Player: Player, RequestId: any, Key: any)
 		if typeof(RequestId) ~= "string" or typeof(Key) ~= "string" then
 			return
 		end
 
-		if not CheckRateLimit(Player) then
+		if not RequestLimiter.Consume(GetPlayerRateKey(Player)) then
 			Packets.DataResponse:FireClient(Player, RequestId, false, nil)
 			return
 		end
@@ -94,22 +90,38 @@ function DataBridgeService.Start()
 		end
 
 		Packets.DataResponse:FireClient(Player, RequestId, true, SafeValue)
-	end))
+	end)
 end
 
 function DataBridgeService.Stop()
 	ServiceTrove:Destroy()
-	table.clear(RequestCounts)
+	RequestLimiter.Destroy()
 end
 
+--[=[
+	Adds a key to the whitelist of requestable data keys.
+
+	@param Key string -- The data key to allow
+]=]
 function DataBridgeService.AddAllowedKey(Key: string)
 	ALLOWED_KEYS[Key] = true
 end
 
+--[=[
+	Removes a key from the whitelist of requestable data keys.
+
+	@param Key string -- The data key to disallow
+]=]
 function DataBridgeService.RemoveAllowedKey(Key: string)
 	ALLOWED_KEYS[Key] = nil
 end
 
+--[=[
+	Returns whether a data key is currently whitelisted.
+
+	@param Key string -- The data key to check
+	@return boolean -- True if the key is allowed
+]=]
 function DataBridgeService.IsKeyAllowed(Key: string): boolean
 	return ALLOWED_KEYS[Key] == true
 end

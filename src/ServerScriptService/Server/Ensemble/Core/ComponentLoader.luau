@@ -1,5 +1,14 @@
 --!strict
 
+--[=[
+	@class ComponentLoader
+
+	Loads, validates, and manages component definitions for Ensemble.
+
+	Handles requiring component ModuleScripts, validating their shape,
+	building a dependency graph, and resolving initialization order.
+]=]
+
 local Types = require(script.Parent.Parent.Types)
 
 type ComponentDefinition = Types.ComponentDefinition
@@ -14,6 +23,14 @@ local ComponentLoader = {}
 local LoadedComponents: { [string]: LoadedComponent } = {}
 local DependencyGraph: { [string]: { string } } = {}
 
+--[=[
+	Validates that a component definition has the required shape.
+
+	@param ModuleName string -- The name of the ModuleScript being validated
+	@param Definition any -- The value returned by requiring the module
+	@return boolean -- Whether the definition is valid
+	@return string? -- An error message if validation failed
+]=]
 function ComponentLoader.ValidateDefinition(ModuleName: string, Definition: any): (boolean, string?)
 	if not ModuleName then
 		return false, "Module must have a name"
@@ -42,6 +59,13 @@ function ComponentLoader.ValidateDefinition(ModuleName: string, Definition: any)
 	return true, nil
 end
 
+--[=[
+	Requires and validates a single component ModuleScript.
+
+	@param ModuleScript ModuleScript -- The component module to load
+	@return LoadedComponent? -- The loaded component, or nil on failure
+	@return string? -- An error message if loading failed
+]=]
 function ComponentLoader.LoadComponent(ModuleScript: ModuleScript): (LoadedComponent?, string?)
 	local Success, Result = pcall(require, ModuleScript)
 	if not Success then
@@ -59,6 +83,12 @@ function ComponentLoader.LoadComponent(ModuleScript: ModuleScript): (LoadedCompo
 	}, nil
 end
 
+--[=[
+	Validates all dependencies exist and that no circular dependencies are present.
+
+	Uses a single-pass three-state traversal (unvisited, visiting, visited)
+	to detect cycles across the entire dependency graph at once.
+]=]
 function ComponentLoader.ValidateDependencies()
 	local Available: { [string]: boolean } = {}
 	for ComponentName in LoadedComponents do
@@ -78,38 +108,40 @@ function ComponentLoader.ValidateDependencies()
 		end
 	end
 
+	local Visited: { [string]: boolean } = {}
+	local Visiting: { [string]: boolean } = {}
+
+	local function CheckCycle(Name: string)
+		if Visited[Name] then
+			return
+		end
+
+		if Visiting[Name] then
+			error(string.format("%s Circular dependency involving '%s'", Types.EngineName, Name))
+		end
+
+		Visiting[Name] = true
+
+		local Dependencies = DependencyGraph[Name] or {}
+		for _, Dependency in pairs(Dependencies) do
+			CheckCycle(Dependency)
+		end
+
+		Visiting[Name] = false
+		Visited[Name] = true
+	end
+
 	for ComponentName in LoadedComponents do
-		local Visited: { [string]: boolean } = {}
-		local Stack: { [string]: boolean } = {}
-
-		local function HasCycle(Name: string): boolean
-			if Stack[Name] then
-				return true
-			end
-			if Visited[Name] then
-				return false
-			end
-
-			Visited[Name] = true
-			Stack[Name] = true
-
-			local Dependencies = DependencyGraph[Name] or {}
-			for _, Dependency in pairs(Dependencies) do
-				if HasCycle(Dependency) then
-					return true
-				end
-			end
-
-			Stack[Name] = false
-			return false
-		end
-
-		if HasCycle(ComponentName) then
-			error(string.format("%s Circular dependency involving '%s'", Types.EngineName, ComponentName))
-		end
+		CheckCycle(ComponentName)
 	end
 end
 
+--[=[
+	Loads all component ModuleScripts from a folder, validates them,
+	builds the dependency graph, and checks for circular dependencies.
+
+	@param Folder Instance -- The folder containing component ModuleScripts
+]=]
 function ComponentLoader.Configure(Folder: Instance)
 	table.clear(LoadedComponents)
 	table.clear(DependencyGraph)
@@ -136,18 +168,41 @@ function ComponentLoader.Configure(Folder: Instance)
 	ComponentLoader.ValidateDependencies()
 end
 
+--[=[
+	Returns the loaded component for a given name.
+
+	@param ComponentName string -- The component name to look up
+	@return LoadedComponent? -- The loaded component, or nil if not found
+]=]
 function ComponentLoader.Get(ComponentName: string): LoadedComponent?
 	return LoadedComponents[ComponentName]
 end
 
+--[=[
+	Returns whether a component with the given name has been loaded.
+
+	@param ComponentName string -- The component name to check
+	@return boolean -- True if the component exists
+]=]
 function ComponentLoader.Has(ComponentName: string): boolean
 	return LoadedComponents[ComponentName] ~= nil
 end
 
+--[=[
+	Returns the dependency list for a given component.
+
+	@param ComponentName string -- The component name
+	@return { string } -- Array of dependency names
+]=]
 function ComponentLoader.GetDependencies(ComponentName: string): { string }
 	return DependencyGraph[ComponentName] or {}
 end
 
+--[=[
+	Returns an array of all loaded component names.
+
+	@return { string } -- Array of component names
+]=]
 function ComponentLoader.GetAllNames(): { string }
 	local Names = {}
 	for Name in LoadedComponents do
@@ -156,6 +211,11 @@ function ComponentLoader.GetAllNames(): { string }
 	return Names
 end
 
+--[=[
+	Returns component names and their update rates for all components that define an UpdateRate.
+
+	@return { { Name: string, Rate: number } } -- Array of component update info
+]=]
 function ComponentLoader.GetWithUpdates(): { { Name: string, Rate: number } }
 	local Result = {}
 	for Name, Loaded in LoadedComponents do
@@ -169,6 +229,13 @@ function ComponentLoader.GetWithUpdates(): { { Name: string, Rate: number } }
 	return Result
 end
 
+--[=[
+	Resolves a topological initialization order for the given component names
+	based on the dependency graph.
+
+	@param ComponentNames { string } -- The components to resolve
+	@return { string } -- Dependency-ordered component names
+]=]
 function ComponentLoader.ResolveDependencyOrder(ComponentNames: { string }): { string }
 	local Resolved: { string } = {}
 	local ResolvedSet: { [string]: boolean } = {}

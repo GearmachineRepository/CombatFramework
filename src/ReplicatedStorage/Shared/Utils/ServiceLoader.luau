@@ -1,14 +1,10 @@
 --!strict
 
---[[
-	ServiceLoader
+--[=[
+	@class ServiceLoader
 
 	A lightweight lifecycle manager for loading, ordering, and starting service/controller
 	ModuleScripts without sacrificing IntelliSense.
-
-	This module solves a common Knit-style problem: you want to `require()` other services
-	directly (so tooling can infer types), but you also want a deterministic lifecycle that
-	prevents race conditions (everything loaded before Init, everything initialized before Start).
 
 	Core guarantees:
 	- All ModuleScripts in the provided folder are required before any Init runs.
@@ -21,49 +17,21 @@
 	- Dependency names refer to sibling ModuleScript names in the loaded folder.
 	- Circular dependencies error during load ordering.
 
-	Service shape:
 	```lua
-	return {
-		Dependencies = { "SomeOtherService" }, -- optional
-		Init = function()
-			-- optional
-		end,
-		Start = function()
-			-- optional
-		end,
-		Stop = function()
-			-- optional
-		end,
-	}
-	```
-
-	Usage:
-
-	```lua
-	-- Bootstrap.server.lua
-	local ServiceLoader = require(Shared.ServiceLoader)
+	local ServiceLoader = require(Shared.Utils.ServiceLoader)
 
 	ServiceLoader.LoadServices(Server.Services)
 	ServiceLoader.InitAll()
 	ServiceLoader.StartAll()
 	```
-
-	In any service, require dependencies directly for IntelliSense:
-	```lua
-	local OtherService = require(script.Parent.OtherService)
-
-	function MyService.Init()
-		-- Safe: all modules are already required
-	end
-
-	function MyService.Start()
-		-- Safe: all Init calls are complete before StartAll triggers
-	end
-	```
-]]
+]=]
 
 local ServiceLoader = {}
 
+--[=[
+	@within ServiceLoader
+	@type ServiceModule { Init: (() -> ())?, Start: (() -> ())?, Stop: (() -> ())?, Dependencies: { string }?, [string]: unknown }
+]=]
 export type ServiceModule = {
 	Init: (() -> ())?,
 	Start: (() -> ())?,
@@ -72,6 +40,10 @@ export type ServiceModule = {
 	[string]: unknown,
 }
 
+--[=[
+	@within ServiceLoader
+	@type LoadedService { Name: string, Module: ServiceModule, Initialized: boolean, Started: boolean }
+]=]
 export type LoadedService = {
 	Name: string,
 	Module: ServiceModule,
@@ -83,13 +55,6 @@ local LoadedServices: { [string]: LoadedService } = {}
 local InitOrder: { string } = {}
 local IsInitializedFlag = false
 local IsStartedFlag = false
-
-local function SafeCallVoid(VoidFunction: () -> ()): (boolean, unknown)
-	return pcall(function()
-		VoidFunction()
-		return nil
-	end)
-end
 
 local function TopologicalSort(Services: { [string]: LoadedService }): { string }
 	local Sorted: { string } = {}
@@ -131,28 +96,13 @@ local function TopologicalSort(Services: { [string]: LoadedService }): { string 
 	return Sorted
 end
 
---[[
+--[=[
 	Loads (requires) all ModuleScripts under the given Folder.
 
 	This must be called before `InitAll()` and `StartAll()`.
 
-	Behavior:
-	- Iterates through all children of `Folder`
-	- Requires each ModuleScript
-	- Validates the module returns a table
-	- Stores modules by `ModuleScript.Name`
-	- Computes dependency-safe initialization order
-
-	Errors:
-	- If called after initialization has begun
-	- If a ModuleScript fails to require
-	- If a ModuleScript does not return a table
-	- If a circular dependency is detected
-
-	```lua
-	ServiceLoader.LoadServices(Server.Services)
-	```
-]]
+	@param Folder Instance -- The folder containing service ModuleScripts
+]=]
 function ServiceLoader.LoadServices(Folder: Instance)
 	if IsInitializedFlag then
 		error("[ServiceLoader] Cannot load services after initialization")
@@ -183,18 +133,12 @@ function ServiceLoader.LoadServices(Folder: Instance)
 	InitOrder = TopologicalSort(LoadedServices)
 end
 
---[[
+--[=[
 	Invokes `Init()` on all loaded services in dependency order.
 
-	Notes:
-	- Runs synchronously.
-	- If a service has no `Init`, it is still marked initialized.
-	- Errors if any `Init()` errors.
-
-	```lua
-	ServiceLoader.InitAll()
-	```
-]]
+	Runs synchronously. If a service has no `Init`, it is still marked initialized.
+	Errors if any `Init()` errors.
+]=]
 function ServiceLoader.InitAll()
 	if IsInitializedFlag then
 		error("[ServiceLoader] Already initialized")
@@ -205,7 +149,11 @@ function ServiceLoader.InitAll()
 		if Service ~= nil then
 			local InitFunction = Service.Module.Init
 			if InitFunction ~= nil then
-				local Success, ErrorMessage = SafeCallVoid(InitFunction)
+				local Success, ErrorMessage = pcall(function()
+					InitFunction()
+					return nil
+				end)
+
 				if not Success then
 					error(string.format("[ServiceLoader] %s.Init() failed: %s", Name, tostring(ErrorMessage)))
 				end
@@ -218,18 +166,13 @@ function ServiceLoader.InitAll()
 	IsInitializedFlag = true
 end
 
---[[
+--[=[
 	Invokes `Start()` on all loaded services in dependency order.
 
-	Notes:
-	- Requires `InitAll()` to have completed successfully.
-	- Each `Start()` runs in its own `task.spawn` to prevent one service from blocking others.
-	- Start failures are warned (not raised as errors) to avoid hard-stopping the experience.
-
-	```lua
-	ServiceLoader.StartAll()
-	```
-]]
+	Requires `InitAll()` to have completed successfully.
+	Each `Start()` runs in its own `task.spawn` to prevent one service from blocking others.
+	Start failures are warned (not raised as errors) to avoid hard-stopping the experience.
+]=]
 function ServiceLoader.StartAll()
 	if not IsInitializedFlag then
 		error("[ServiceLoader] Must call InitAll before StartAll")
@@ -245,7 +188,11 @@ function ServiceLoader.StartAll()
 			local StartFunction = Service.Module.Start
 			if StartFunction ~= nil then
 				task.spawn(function()
-					local Success, ErrorMessage = SafeCallVoid(StartFunction)
+					local Success, ErrorMessage = pcall(function()
+						StartFunction()
+						return nil
+					end)
+
 					if not Success then
 						warn(string.format("[ServiceLoader] %s.Start() failed: %s", Name, tostring(ErrorMessage)))
 					end
@@ -259,18 +206,13 @@ function ServiceLoader.StartAll()
 	IsStartedFlag = true
 end
 
---[[
+--[=[
 	Invokes `Stop()` on all loaded services in reverse dependency order.
 
-	Notes:
-	- No-op if `StartAll()` has not been called.
-	- Reverse order helps ensure dependents stop before dependencies.
-	- Stop failures are warned.
-
-	```lua
-	ServiceLoader.StopAll()
-	```
-]]
+	No-op if `StartAll()` has not been called.
+	Reverse order helps ensure dependents stop before dependencies.
+	Stop failures are warned.
+]=]
 function ServiceLoader.StopAll()
 	if not IsStartedFlag then
 		return
@@ -282,7 +224,11 @@ function ServiceLoader.StopAll()
 		if Service ~= nil then
 			local StopFunction = Service.Module.Stop
 			if StopFunction ~= nil then
-				local Success, ErrorMessage = SafeCallVoid(StopFunction)
+				local Success, ErrorMessage = pcall(function()
+					StopFunction()
+					return nil
+				end)
+
 				if not Success then
 					warn(string.format("[ServiceLoader] %s.Stop() failed: %s", Name, tostring(ErrorMessage)))
 				end
@@ -293,30 +239,29 @@ function ServiceLoader.StopAll()
 	IsStartedFlag = false
 end
 
---[[
+--[=[
 	Returns whether `InitAll()` has completed successfully.
-]]
+
+	@return boolean -- True if initialization is complete
+]=]
 function ServiceLoader.IsInitialized(): boolean
 	return IsInitializedFlag
 end
 
---[[
+--[=[
 	Returns whether `StartAll()` has been called.
-]]
+
+	@return boolean -- True if all services have been started
+]=]
 function ServiceLoader.IsStarted(): boolean
 	return IsStartedFlag
 end
 
---[[
+--[=[
 	Returns the service initialization order computed by dependency sorting.
 
-	```lua
-	local Order = ServiceLoader.GetLoadOrder()
-	for _, Name in ipairs(Order) do
-		print(Name)
-	end
-	```
-]]
+	@return { string } -- Ordered list of service names
+]=]
 function ServiceLoader.GetLoadOrder(): { string }
 	return table.clone(InitOrder)
 end

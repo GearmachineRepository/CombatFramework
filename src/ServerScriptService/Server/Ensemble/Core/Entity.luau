@@ -1,5 +1,15 @@
 --!strict
 
+--[=[
+	@class Entity
+
+	Manages entity instances in the Ensemble ECS.
+
+	Each entity is tied to a Character Model and tracks its components,
+	player association, and context. Entities are registered globally
+	and can be looked up by their Character reference.
+]=]
+
 local Types = require(script.Parent.Parent.Types)
 
 type Entity = Types.Entity
@@ -10,6 +20,15 @@ local Entity = {}
 
 local EntityRegistry: { [Model]: Entity } = {}
 
+--[=[
+	Creates a new Entity bound to the given Character.
+
+	Sets a `HasEntity` attribute on the Character for external visibility.
+
+	@param Character Model -- The character model to bind the entity to
+	@param Context EntityContext -- Contextual data for the entity
+	@return Entity -- The newly created entity
+]=]
 function Entity.Create(Character: Model, Context: EntityContext): Entity
 	local Humanoid = Character:FindFirstChildOfClass("Humanoid")
 	if not Humanoid then
@@ -81,10 +100,21 @@ function Entity.Create(Character: Model, Context: EntityContext): Entity
 	return NewEntity
 end
 
+--[=[
+	Returns the entity bound to the given Character, or nil if none exists.
+
+	@param Character Model -- The character to look up
+	@return Entity? -- The entity, or nil
+]=]
 function Entity.Get(Character: Model): Entity?
 	return EntityRegistry[Character]
 end
 
+--[=[
+	Returns an array of all currently registered entities.
+
+	@return { Entity } -- All active entities
+]=]
 function Entity.GetAll(): { Entity }
 	local Entities = {}
 	for _, EntityInstance in EntityRegistry do
@@ -93,6 +123,11 @@ function Entity.GetAll(): { Entity }
 	return Entities
 end
 
+--[=[
+	Destroys the entity bound to the given Character, if one exists.
+
+	@param Character Model -- The character whose entity should be destroyed
+]=]
 function Entity.Destroy(Character: Model)
 	local EntityInstance = EntityRegistry[Character]
 	if EntityInstance then

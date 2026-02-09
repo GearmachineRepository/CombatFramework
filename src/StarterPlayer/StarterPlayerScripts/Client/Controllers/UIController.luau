@@ -26,13 +26,13 @@ function UIController.Init()
 end
 
 function UIController.Start()
-    PlayerGui.ChildAdded:Connect(function(Child: Instance)
+    ControllerTrove:Connect(PlayerGui.ChildAdded, function(Child: Instance)
         if Child:IsA("ScreenGui") then
             UIController.RegisterScreen(Child.Name, Child)
         end
     end)
 
-    PlayerGui.ChildRemoved:Connect(function(Child: Instance)
+    ControllerTrove:Connect(PlayerGui.ChildRemoved, function(Child: Instance)
         if Child:IsA("ScreenGui") then
             UIController.UnregisterScreen(Child.Name)
         end

@@ -17,7 +17,7 @@ local TableUtil = Packages.TableUtil
 
 local PlayerDataService = require(Server.Services.PlayerDataService)
 
-type KeybindCategory = { [number]: string }
+type KeybindCategory = { [string]: string }
 type KeybindData = { [string]: KeybindCategory }
 
 local KeybindService = {}
@@ -30,7 +30,7 @@ local PlayerKeybindCache: { [Player]: KeybindData } = {}
 KeybindService.KeybindChanged = Signal.new()
 
 local function GetDefaults(): KeybindData
-	return TableUtil.Copy(PlayerDataTemplate.Keybinds, true)
+	return TableUtil.Copy(PlayerDataTemplate.Keybinds, true) :: KeybindData
 end
 
 local function IsValidKeyCode(KeyCodeName: string): boolean
@@ -92,7 +92,7 @@ function KeybindService.LoadKeybinds(Player: Player, Data: any?)
 	Packets.KeybindSync:FireClient(Player, Keybinds)
 end
 
-function KeybindService.GetKeybind(Player: Player, Category: string, SlotIndex: number): string?
+function KeybindService.GetKeybind(Player: Player, Category: string, SlotIndex: any): string?
 	local Keybinds = PlayerKeybindCache[Player]
 	if not Keybinds then
 		return nil
@@ -123,7 +123,7 @@ function KeybindService.GetAllKeybinds(Player: Player): KeybindData
 	return Keybinds
 end
 
-function KeybindService.SetKeybind(Player: Player, Category: string, SlotIndex: number, KeyCodeName: string)
+function KeybindService.SetKeybind(Player: Player, Category: string, SlotIndex: any, KeyCodeName: string)
 	if not IsValidCategory(Category) then
 		return
 	end
