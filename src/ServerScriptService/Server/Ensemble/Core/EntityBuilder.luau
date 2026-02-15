@@ -137,9 +137,9 @@ function EntityBuilder.Create(Character: Model, Context: EntityContext?): Entity
 		for _, ComponentInstance in CreatedComponents do
 			if ComponentInstance.Init then
 				local Success, ErrorMessage = pcall(function()
-                    ComponentInstance.Init()
-                    return nil
-                end)
+					ComponentInstance:Init()
+					return nil
+				end)
 
 				if not Success then
 					warn(string.format("%s Component Init failed: %s", Types.EngineName, tostring(ErrorMessage)))
@@ -151,9 +151,9 @@ function EntityBuilder.Create(Character: Model, Context: EntityContext?): Entity
 			if ComponentInstance.Start then
 				task.spawn(function()
 					local Success, ErrorMessage = pcall(function()
-                        ComponentInstance.Start()
-                        return nil
-                    end)
+						ComponentInstance:Start()
+						return nil
+					end)
 
 					if not Success then
 						warn(string.format("%s Component Start failed: %s", Types.EngineName, tostring(ErrorMessage)))

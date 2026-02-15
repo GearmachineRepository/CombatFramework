@@ -46,12 +46,12 @@ function UpdateSystem.UpdateEntity(EntityData: EntityUpdateData, DeltaTime: numb
 	end
 
 	for ComponentName, UpdateRate in UpdateRates do
-		local Component = EntityInstance:GetComponent(ComponentName)
-		if not Component then
+		local ComponentInstance = EntityInstance:GetComponent(ComponentName)
+		if not ComponentInstance then
 			continue
 		end
 
-		if not Component.Update then
+		if not ComponentInstance.Update then
 			continue
 		end
 
@@ -59,7 +59,7 @@ function UpdateSystem.UpdateEntity(EntityData: EntityUpdateData, DeltaTime: numb
 		Accumulator = Accumulator + DeltaTime
 
 		if Accumulator >= UpdateRate then
-			local Success, ErrorMessage = pcall(Component.Update, Accumulator)
+			local Success, ErrorMessage = pcall(ComponentInstance.Update, ComponentInstance, Accumulator)
 			if not Success then
 				warn(string.format("%s Component '%s' update failed: %s", Types.EngineName, ComponentName, tostring(ErrorMessage)))
 			end

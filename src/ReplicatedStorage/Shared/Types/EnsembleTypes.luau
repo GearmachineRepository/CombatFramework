@@ -65,10 +65,10 @@ export type EntityContext = {
 }
 
 export type Component = {
-	Init: (() -> ())?,
-	Start: (() -> ())?,
-	Destroy: () -> (),
-	Update: ((DeltaTime: number) -> ())?,
+	Init: ((self: Component) -> ()),
+	Start: ((self: Component) -> ()),
+	Destroy: (self: Component) -> (),
+	Update: ((self: Component, DeltaTime: number) -> ())?,
 	[string]: any,
 }
 

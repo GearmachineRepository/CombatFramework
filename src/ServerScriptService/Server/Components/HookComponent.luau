@@ -8,6 +8,14 @@
 	Manages activation and deactivation of named hooks (buffs, debuffs,
 	status effects, etc.) on an entity. Each hook can return a cleanup
 	function from its OnActivate, which is called on unregister.
+
+	```lua
+	local Hooks = HookComponent.From(Entity)
+	if Hooks then
+		Hooks:Register("SpeedBoost")
+		Hooks:Unregister("SpeedBoost")
+	end
+	```
 ]=]
 
 local ServerScriptService = game:GetService("ServerScriptService")
@@ -15,31 +23,34 @@ local Server = ServerScriptService:WaitForChild("Server")
 local HookLoader = require(Server.HookUtil.HookLoader)
 
 local HookComponent = {}
-
 HookComponent.ComponentName = "Hooks"
 HookComponent.Dependencies = {}
 
-type HookInstance = {
-	Register: (HookName: string) -> boolean,
-	Unregister: (HookName: string) -> (),
-	Has: (HookName: string) -> boolean,
-	GetActive: () -> { string },
-	Destroy: () -> (),
-}
+local HookInstance = {}
+HookInstance.__index = HookInstance
 
 type ActiveHook = {
 	Name: string,
 	Cleanup: (() -> ())?,
 }
 
---[=[
-	Returns the Hooks component instance from the given entity, or nil.
+type ActiveHooks = { [string]: ActiveHook }
 
-	@param Entity any -- The entity to look up
-	@return Type? -- The hooks component, or nil
+type HookStorage = {
+	_ActiveHooks: ActiveHooks,
+	_Entity: any,
+}
+
+type HookInstanceInternal = typeof(setmetatable({} :: HookStorage, {} :: typeof(HookInstance)))
+
+--[=[
+	Returns the HookComponent attached to the given entity, or nil.
+
+	@param EntityInstance any -- The entity to look up
+	@return HookInstance? -- The hooks instance, or nil
 ]=]
-function HookComponent.From(Entity: any): Type?
-	return Entity:GetComponent("Hooks")
+function HookComponent.From(EntityInstance: any): HookInstanceInternal?
+	return EntityInstance:GetComponent("Hooks")
 end
 
 --[=[
@@ -49,90 +60,117 @@ end
 	@param _Context any -- Entity context (unused)
 	@return HookInstance -- The component instance
 ]=]
-function HookComponent.Create(Entity: any, _Context: any): HookInstance
-	local ActiveHooks: { [string]: ActiveHook } = {}
-
-	local function Register(HookName: string): boolean
-		if ActiveHooks[HookName] then
-			return false
-		end
-
-		local Hook = HookLoader.Get(HookName)
-		if not Hook then
-			warn(string.format("[HookComponent] Hook not found: '%s'", HookName))
-			return false
-		end
-
-		local Success, CleanupOrError = pcall(Hook.OnActivate, Entity)
-		if not Success then
-			warn(string.format("[HookComponent] Hook '%s' activation failed: %s", HookName, tostring(CleanupOrError)))
-			return false
-		end
-
-		ActiveHooks[HookName] = {
-			Name = HookName,
-			Cleanup = if type(CleanupOrError) == "function" then CleanupOrError else nil,
-		}
-
-		return true
-	end
-
-	local function Unregister(HookName: string)
-		local ActiveHook = ActiveHooks[HookName]
-		if not ActiveHook then
-			return
-		end
-
-		if ActiveHook.Cleanup then
-			local Success = pcall(function()
-				ActiveHook.Cleanup()
-			end)
-			if not Success then
-				warn(string.format("[HookComponent] Hook '%s' cleanup failed", HookName))
-			end
-		end
-
-		if HookLoader then
-			local Hook = HookLoader.Get(HookName)
-			if Hook and Hook.OnDeactivate then
-				local Success = pcall(Hook.OnDeactivate, Entity)
-				if not Success then
-					warn(string.format("[HookComponent] Hook '%s' deactivation failed", HookName))
-				end
-			end
-		end
-
-		ActiveHooks[HookName] = nil
-	end
-
-	local function Has(HookName: string): boolean
-		return ActiveHooks[HookName] ~= nil
-	end
-
-	local function GetActive(): { string }
-		local Names = {}
-		for Name in ActiveHooks do
-			table.insert(Names, Name)
-		end
-		return Names
-	end
-
-	local function Destroy()
-		for HookName in pairs(table.clone(ActiveHooks)) do
-			Unregister(HookName)
-		end
-		table.clear(ActiveHooks)
-	end
-
-	return {
-		Register = Register,
-		Unregister = Unregister,
-		Has = Has,
-		GetActive = GetActive,
-		Destroy = Destroy,
+function HookComponent.Create(Entity: any, _Context: any): HookInstanceInternal
+	local Storage: HookStorage = {
+		_ActiveHooks = {},
+		_Entity = Entity,
 	}
+
+	return setmetatable(Storage, HookInstance)
 end
 
-export type Type = typeof(HookComponent.Create(nil :: any, nil :: any))
+--[=[
+	Activates a named hook on this entity. Returns false if the hook
+	is already active or if the hook definition is not found.
+
+	@param self HookInstance
+	@param HookName string -- The hook to activate
+	@return boolean -- True if activation succeeded
+]=]
+function HookInstance:Register(HookName: string): boolean
+	if self._ActiveHooks[HookName] then
+		return false
+	end
+
+	local Hook = HookLoader.Get(HookName)
+	if not Hook then
+		warn(string.format("[HookComponent] Hook not found: '%s'", HookName))
+		return false
+	end
+
+	local Success, CleanupOrError = pcall(Hook.OnActivate, self._Entity)
+	if not Success then
+		warn(string.format("[HookComponent] Hook '%s' activation failed: %s", HookName, tostring(CleanupOrError)))
+		return false
+	end
+
+	self._ActiveHooks[HookName] = {
+		Name = HookName,
+		Cleanup = if type(CleanupOrError) == "function" then CleanupOrError else nil,
+	}
+
+	return true
+end
+
+--[=[
+	Deactivates a named hook, running its cleanup and OnDeactivate if present.
+
+	@param self HookInstance
+	@param HookName string -- The hook to deactivate
+]=]
+function HookInstance:Unregister(HookName: string)
+	local ActiveHook = self._ActiveHooks[HookName] :: ActiveHook?
+	if not ActiveHook then
+		return
+	end
+
+	if ActiveHook.Cleanup then
+		local Success = pcall(function()
+			ActiveHook.Cleanup()
+		end)
+		if not Success then
+			warn(string.format("[HookComponent] Hook '%s' cleanup failed", HookName))
+		end
+	end
+
+	local Hook = HookLoader.Get(HookName)
+	if Hook and Hook.OnDeactivate then
+		local Success = pcall(Hook.OnDeactivate, self._Entity)
+		if not Success then
+			warn(string.format("[HookComponent] Hook '%s' deactivation failed", HookName))
+		end
+	end
+
+	self._ActiveHooks[HookName] = nil
+end
+
+--[=[
+	Returns whether a hook is currently active.
+
+	@param self HookInstance
+	@param HookName string -- The hook to check
+	@return boolean -- True if the hook is active
+]=]
+function HookInstance:Has(HookName: string): boolean
+	return self._ActiveHooks[HookName] ~= nil
+end
+
+--[=[
+	Returns an array of all currently active hook names.
+
+	@param self HookInstance
+	@return { string } -- Array of active hook names
+]=]
+function HookInstance:GetActive(): { string }
+	local Names = {}
+	for Name in self._ActiveHooks :: ActiveHooks do
+		table.insert(Names, Name)
+	end
+	return Names
+end
+
+--[=[
+	Destroys the component, unregistering all active hooks.
+
+	@param self HookInstance
+]=]
+function HookInstance:Destroy()
+	for HookName in pairs(table.clone(self._ActiveHooks)) do
+		self:Unregister(HookName)
+	end
+	table.clear(self._ActiveHooks)
+end
+
+export type Type = typeof(setmetatable({} :: HookStorage, HookInstance))
 
 return HookComponent

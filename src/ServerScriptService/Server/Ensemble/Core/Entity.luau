@@ -66,6 +66,11 @@ function Entity.Create(Character: Model, Context: EntityContext): Entity
 		Components[ComponentName] = ComponentInstance
 	end
 
+	--[=[
+		Removes a component by name and calls its Destroy method.
+
+		@param ComponentName string -- The component to remove
+	]=]
 	function NewEntity:RemoveComponent(ComponentName: string)
 		local ComponentInstance = Components[ComponentName]
 		if not ComponentInstance then
@@ -73,19 +78,22 @@ function Entity.Create(Character: Model, Context: EntityContext): Entity
 		end
 		Components[ComponentName] = nil
 		if ComponentInstance.Destroy then
-			ComponentInstance.Destroy()
+			ComponentInstance:Destroy()
 		end
 	end
 
+	--[=[
+		Destroys the entity and all attached components.
+	]=]
 	function NewEntity:Destroy()
 		if Destroyed then
 			return
 		end
 		Destroyed = true
 
-		for ComponentName, ComponentInstance in Components do
-			if ComponentName and ComponentInstance.Destroy then
-				ComponentInstance.Destroy()
+		for _, ComponentInstance in Components do
+			if ComponentInstance.Destroy then
+				ComponentInstance:Destroy()
 			end
 		end
 		table.clear(Components)
@@ -111,28 +119,16 @@ function Entity.Get(Character: Model): Entity?
 end
 
 --[=[
-	Returns an array of all currently registered entities.
+	Returns all currently registered entities.
 
-	@return { Entity } -- All active entities
+	@return { Entity } -- Array of all active entities
 ]=]
 function Entity.GetAll(): { Entity }
-	local Entities = {}
+	local Result: { Entity } = {}
 	for _, EntityInstance in EntityRegistry do
-		table.insert(Entities, EntityInstance)
+		table.insert(Result, EntityInstance)
 	end
-	return Entities
-end
-
---[=[
-	Destroys the entity bound to the given Character, if one exists.
-
-	@param Character Model -- The character whose entity should be destroyed
-]=]
-function Entity.Destroy(Character: Model)
-	local EntityInstance = EntityRegistry[Character]
-	if EntityInstance then
-		EntityInstance:Destroy()
-	end
+	return Result
 end
 
 return Entity

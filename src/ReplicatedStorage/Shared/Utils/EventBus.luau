@@ -32,6 +32,7 @@ export type Connection = {
 	Connected: boolean,
 }
 
+
 export type EventBus = {
 	Subscribe: (self: EventBus, EventName: string, Callback: (...any) -> ()) -> Connection,
 	SubscribeOnce: (self: EventBus, EventName: string, Callback: (...any) -> ()) -> Connection,
@@ -44,24 +45,29 @@ export type EventBus = {
 }
 
 type SignalType = typeof(Signal.new())
+type TroveType = typeof(Trove.new())
 
-type EventBusInternal = EventBus & {
+type EventBusStorage = {
 	_Events: { [string]: SignalType },
 	_Destroyed: boolean,
-	_Trove: typeof(Trove.new()),
+	_Trove: TroveType,
 }
 
 local EventBus = {}
 EventBus.__index = EventBus
 
+type EventBusInternal = typeof(setmetatable({} :: EventBusStorage, EventBus))
+
 local function CreateEventBus(): EventBusInternal
 	local BusTrove = Trove.new()
-	local self = {
-		_Events = {} :: { [string]: SignalType },
+
+	local SelfTable: EventBusStorage = {
+		_Events = {},
 		_Destroyed = false,
 		_Trove = BusTrove,
 	}
-	return setmetatable(self, EventBus) :: any
+
+	return setmetatable(SelfTable, EventBus)
 end
 
 --[=[
@@ -69,7 +75,7 @@ end
 
 	@return EventBus -- A new EventBus
 ]=]
-function EventBus.new(): EventBus
+function EventBus.new()
 	return CreateEventBus()
 end
 

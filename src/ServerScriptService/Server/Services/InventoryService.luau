@@ -55,11 +55,9 @@ local RuntimeInventories: {
 	},
 } = {}
 
-local InventoryActionLimiter = RateLimiter.Create({
-	MaxTokens = 10,
-	RefillRate = 5,
-	RefillInterval = 1,
-})
+local InventoryActionLimiter: typeof(RateLimiter.Create({} :: any)) = nil :: any
+
+-- Internal helpers
 
 local function IsValidInventoryName(InventoryName: string): boolean
 	return InventoryConfig[InventoryName] ~= nil
@@ -132,213 +130,233 @@ local function SyncAllInventories(Player: Player)
 end
 
 --[=[
-	Creates the service Trove for connection cleanup.
+	Validates that each value matches the expected Luau type name at the same index.
+	Returns false on the first mismatch.
+
+	@param Values { any } -- The values to check
+	@param ExpectedTypes { string } -- Parallel array of typeof() strings
+	@return boolean -- True if all values match their expected type
+]=]
+local function ValidateTypes(Values: { any }, ExpectedTypes: { string }): boolean
+	for Index, Expected in ExpectedTypes do
+		if typeof(Values[Index]) ~= Expected then
+			return false
+		end
+	end
+	return true
+end
+
+--[=[
+	Checks that every inventory name in the list is recognized in InventoryConfig.
+
+	@param ... string -- One or more inventory names
+	@return boolean -- True if all names are valid
+]=]
+local function ValidateInventoryNames(...: string): boolean
+	for Index = 1, select("#", ...) do
+		if not IsValidInventoryName(select(Index, ...)) then
+			return false
+		end
+	end
+	return true
+end
+
+--[=[
+	Consumes a rate limit token for the player. Returns true if allowed.
+
+	@param Player Player -- The player to rate-check
+	@return boolean -- True if the action is permitted
+]=]
+local function ConsumeRateLimit(Player: Player): boolean
+	return InventoryActionLimiter.Consume(GetPlayerRateKey(Player))
+end
+
+-- Packet handlers
+
+local function OnPlayerRemoving(Player: Player)
+	local Data = PlayerDataService.GetData(Player)
+    if Data then
+        local InventoryData = Data.Inventory
+        print(Player.Name, "leaving with inventory:", InventoryData)
+    end
+
+	InventoryService.CleanupPlayerRuntimeInventories(Player)
+	InventoryActionLimiter.Reset(GetPlayerRateKey(Player))
+end
+
+local function OnProfileLoaded(Player: Player, _Data: any)
+	SyncAllInventories(Player)
+end
+
+local function OnInventoryRequest(Player: Player)
+	if PlayerDataService.IsLoaded(Player) then
+		SyncAllInventories(Player)
+	end
+end
+
+local function OnInventoryTransfer(
+	Player: Player,
+	SourceInventory: any,
+	SourceIndex: any,
+	TargetInventory: any,
+	TargetIndex: any
+)
+	if not ValidateTypes({ SourceInventory, SourceIndex, TargetInventory, TargetIndex }, { "string", "number", "string", "number" }) then
+		return
+	end
+
+	if not ValidateInventoryNames(SourceInventory, TargetInventory) then
+		return
+	end
+
+	if not ConsumeRateLimit(Player) then
+		SyncSlot(Player, SourceInventory, SourceIndex)
+		SyncSlot(Player, TargetInventory, TargetIndex)
+		return
+	end
+
+	local Success = InventoryService.TransferSlot(Player, SourceInventory, SourceIndex, TargetInventory, TargetIndex)
+	if not Success then
+		SyncSlot(Player, SourceInventory, SourceIndex)
+		SyncSlot(Player, TargetInventory, TargetIndex)
+	end
+end
+
+local function OnInventorySwap(
+	Player: Player,
+	SourceInventory: any,
+	SourceIndex: any,
+	TargetInventory: any,
+	TargetIndex: any
+)
+	if not ValidateTypes({ SourceInventory, SourceIndex, TargetInventory, TargetIndex }, { "string", "number", "string", "number" }) then
+		return
+	end
+
+	if not ValidateInventoryNames(SourceInventory, TargetInventory) then
+		return
+	end
+
+	if not ConsumeRateLimit(Player) then
+		SyncSlot(Player, SourceInventory, SourceIndex)
+		SyncSlot(Player, TargetInventory, TargetIndex)
+		return
+	end
+
+	local Success = InventoryService.SwapSlots(Player, SourceInventory, SourceIndex, TargetInventory, TargetIndex)
+	if not Success then
+		SyncSlot(Player, SourceInventory, SourceIndex)
+		SyncSlot(Player, TargetInventory, TargetIndex)
+	end
+end
+
+local function OnInventoryDrop(
+	Player: Player,
+	InventoryName: any,
+	SlotIndex: any,
+	Quantity: any
+)
+	if not ValidateTypes({ InventoryName, SlotIndex, Quantity }, { "string", "number", "number" }) then
+		return
+	end
+
+	if not ValidateInventoryNames(InventoryName) then
+		return
+	end
+
+	if not ConsumeRateLimit(Player) then
+		SyncSlot(Player, InventoryName, SlotIndex)
+		return
+	end
+
+	local Success = InventoryService.DropItem(Player, InventoryName, SlotIndex, Quantity)
+	if not Success then
+		SyncSlot(Player, InventoryName, SlotIndex)
+	end
+end
+
+local function OnInventoryDeposit(
+	Player: Player,
+	SourceInventory: any,
+	SourceIndex: any,
+	TargetInventory: any
+)
+	if not ValidateTypes({ SourceInventory, SourceIndex, TargetInventory }, { "string", "number", "string" }) then
+		return
+	end
+
+	if not ValidateInventoryNames(SourceInventory, TargetInventory) then
+		return
+	end
+
+	if not ConsumeRateLimit(Player) then
+		SyncSlot(Player, SourceInventory, SourceIndex)
+		SyncInventory(Player, TargetInventory)
+		return
+	end
+
+	local Success = InventoryService.DepositSlot(Player, SourceInventory, SourceIndex, TargetInventory)
+	if not Success then
+		SyncSlot(Player, SourceInventory, SourceIndex)
+		SyncInventory(Player, TargetInventory)
+	end
+end
+
+local function OnInventoryTransferDeposit(
+	Player: Player,
+	SourceInventory: any,
+	SourceIndex: any,
+	TargetInventory: any,
+	TargetIndex: any
+)
+	if not ValidateTypes({ SourceInventory, SourceIndex, TargetInventory, TargetIndex }, { "string", "number", "string", "number" }) then
+		return
+	end
+
+	if not ValidateInventoryNames(SourceInventory, TargetInventory) then
+		return
+	end
+
+	if not ConsumeRateLimit(Player) then
+		SyncInventory(Player, SourceInventory)
+		SyncSlot(Player, TargetInventory, TargetIndex)
+		return
+	end
+
+	local Success = InventoryService.TransferAndDeposit(Player, SourceInventory, SourceIndex, TargetInventory, TargetIndex)
+	if not Success then
+		SyncInventory(Player, SourceInventory)
+		SyncSlot(Player, TargetInventory, TargetIndex)
+	end
+end
+
+-- Lifecycle
+
+--[=[
+	Creates the service Trove and rate limiter.
 ]=]
 function InventoryService.Init()
 	ServiceTrove = Trove.new()
+
+	InventoryActionLimiter = RateLimiter.Create({
+		MaxTokens = 10,
+		RefillRate = 5,
+		RefillInterval = 1,
+	})
 end
 
 --[=[
 	Subscribes to player lifecycle events and client inventory action packets.
-	Validates all incoming packet data before processing.
 ]=]
 function InventoryService.Start()
-	ServiceTrove:Connect(Players.PlayerRemoving, function(Player: Player)
-		InventoryService.CleanupPlayerRuntimeInventories(Player)
-		InventoryActionLimiter.Reset(GetPlayerRateKey(Player))
-	end)
-
-	ServiceTrove:Connect(PlayerDataService.ProfileLoaded :: any, function(Player: Player, _Data: any)
-		SyncAllInventories(Player)
-	end)
-
-	ServiceTrove:Connect(Packets.InventoryRequest.OnServerEvent :: any, function(Player: Player)
-		if PlayerDataService.IsLoaded(Player) then
-			SyncAllInventories(Player)
-		end
-	end)
-
-	ServiceTrove:Connect(Packets.InventoryTransfer.OnServerEvent :: any, function(
-		Player: Player,
-		SourceInventory: any,
-		SourceIndex: any,
-		TargetInventory: any,
-		TargetIndex: any
-	)
-		if typeof(SourceInventory) ~= "string" then
-			return
-		end
-		if typeof(SourceIndex) ~= "number" then
-			return
-		end
-		if typeof(TargetInventory) ~= "string" then
-			return
-		end
-		if typeof(TargetIndex) ~= "number" then
-			return
-		end
-		if not IsValidInventoryName(SourceInventory) then
-			return
-		end
-		if not IsValidInventoryName(TargetInventory) then
-			return
-		end
-
-		if not InventoryActionLimiter.Consume(GetPlayerRateKey(Player)) then
-			SyncSlot(Player, SourceInventory, SourceIndex)
-			SyncSlot(Player, TargetInventory, TargetIndex)
-			return
-		end
-
-		local Success = InventoryService.TransferSlot(Player, SourceInventory, SourceIndex, TargetInventory, TargetIndex)
-		if not Success then
-			SyncSlot(Player, SourceInventory, SourceIndex)
-			SyncSlot(Player, TargetInventory, TargetIndex)
-		end
-	end)
-
-	ServiceTrove:Connect(Packets.InventorySwap.OnServerEvent :: any, function(
-		Player: Player,
-		SourceInventory: any,
-		SourceIndex: any,
-		TargetInventory: any,
-		TargetIndex: any
-	)
-		if typeof(SourceInventory) ~= "string" then
-			return
-		end
-		if typeof(SourceIndex) ~= "number" then
-			return
-		end
-		if typeof(TargetInventory) ~= "string" then
-			return
-		end
-		if typeof(TargetIndex) ~= "number" then
-			return
-		end
-		if not IsValidInventoryName(SourceInventory) then
-			return
-		end
-		if not IsValidInventoryName(TargetInventory) then
-			return
-		end
-
-		if not InventoryActionLimiter.Consume(GetPlayerRateKey(Player)) then
-			SyncSlot(Player, SourceInventory, SourceIndex)
-			SyncSlot(Player, TargetInventory, TargetIndex)
-			return
-		end
-
-		local Success = InventoryService.SwapSlots(Player, SourceInventory, SourceIndex, TargetInventory, TargetIndex)
-		if not Success then
-			SyncSlot(Player, SourceInventory, SourceIndex)
-			SyncSlot(Player, TargetInventory, TargetIndex)
-		end
-	end)
-
-	ServiceTrove:Connect(Packets.InventoryDrop.OnServerEvent :: any, function(
-		Player: Player,
-		InventoryName: any,
-		SlotIndex: any,
-		Quantity: any
-	)
-		if typeof(InventoryName) ~= "string" then
-			return
-		end
-		if typeof(SlotIndex) ~= "number" then
-			return
-		end
-		if typeof(Quantity) ~= "number" then
-			return
-		end
-		if not IsValidInventoryName(InventoryName) then
-			return
-		end
-
-		if not InventoryActionLimiter.Consume(GetPlayerRateKey(Player)) then
-			SyncSlot(Player, InventoryName, SlotIndex)
-			return
-		end
-
-		local Success = InventoryService.DropItem(Player, InventoryName, SlotIndex, Quantity)
-		if not Success then
-			SyncSlot(Player, InventoryName, SlotIndex)
-		end
-	end)
-
-	ServiceTrove:Connect(Packets.InventoryDeposit.OnServerEvent :: any, function(
-		Player: Player,
-		SourceInventory: any,
-		SourceIndex: any,
-		TargetInventory: any
-	)
-		if typeof(SourceInventory) ~= "string" then
-			return
-		end
-		if typeof(SourceIndex) ~= "number" then
-			return
-		end
-		if typeof(TargetInventory) ~= "string" then
-			return
-		end
-		if not IsValidInventoryName(SourceInventory) then
-			return
-		end
-		if not IsValidInventoryName(TargetInventory) then
-			return
-		end
-
-		if not InventoryActionLimiter.Consume(GetPlayerRateKey(Player)) then
-			SyncSlot(Player, SourceInventory, SourceIndex)
-			SyncInventory(Player, TargetInventory)
-			return
-		end
-
-		local Success = InventoryService.DepositSlot(Player, SourceInventory, SourceIndex, TargetInventory)
-		if not Success then
-			SyncSlot(Player, SourceInventory, SourceIndex)
-			SyncInventory(Player, TargetInventory)
-		end
-	end)
-
-	ServiceTrove:Connect(Packets.InventoryTransferDeposit.OnServerEvent :: any, function(
-		Player: Player,
-		SourceInventory: any,
-		SourceIndex: any,
-		TargetInventory: any,
-		TargetIndex: any
-	)
-		if typeof(SourceInventory) ~= "string" then
-			return
-		end
-		if typeof(SourceIndex) ~= "number" then
-			return
-		end
-		if typeof(TargetInventory) ~= "string" then
-			return
-		end
-		if typeof(TargetIndex) ~= "number" then
-			return
-		end
-		if not IsValidInventoryName(SourceInventory) then
-			return
-		end
-		if not IsValidInventoryName(TargetInventory) then
-			return
-		end
-
-		if not InventoryActionLimiter.Consume(GetPlayerRateKey(Player)) then
-			SyncInventory(Player, SourceInventory)
-			SyncSlot(Player, TargetInventory, TargetIndex)
-			return
-		end
-
-		local Success = InventoryService.TransferAndDeposit(Player, SourceInventory, SourceIndex, TargetInventory, TargetIndex)
-		if not Success then
-			SyncInventory(Player, SourceInventory)
-			SyncSlot(Player, TargetInventory, TargetIndex)
-		end
-	end)
+	ServiceTrove:Connect(Players.PlayerRemoving, OnPlayerRemoving)
+	ServiceTrove:Connect(PlayerDataService.ProfileLoaded :: any, OnProfileLoaded)
+	ServiceTrove:Connect(Packets.InventoryRequest.OnServerEvent :: any, OnInventoryRequest)
+	ServiceTrove:Connect(Packets.InventoryTransfer.OnServerEvent :: any, OnInventoryTransfer)
+	ServiceTrove:Connect(Packets.InventorySwap.OnServerEvent :: any, OnInventorySwap)
+	ServiceTrove:Connect(Packets.InventoryDrop.OnServerEvent :: any, OnInventoryDrop)
+	ServiceTrove:Connect(Packets.InventoryDeposit.OnServerEvent :: any, OnInventoryDeposit)
+	ServiceTrove:Connect(Packets.InventoryTransferDeposit.OnServerEvent :: any, OnInventoryTransferDeposit)
 
 	for _, Player in Players:GetPlayers() do
 		if PlayerDataService.IsLoaded(Player) then
@@ -355,6 +373,10 @@ function InventoryService.Stop()
 	InventoryActionLimiter.Destroy()
 	table.clear(RuntimeInventories)
 end
+
+-- ────────────────────────────────────────────────────────────
+-- Public API
+-- ────────────────────────────────────────────────────────────
 
 --[=[
 	Returns the full inventory table for the given player and inventory name.
@@ -478,22 +500,27 @@ function InventoryService.RemoveItem(
 
 	local MaxSlots = GetMaxSlots(InventoryName)
 
-	local SlotsBefore: { [number]: number } = {}
+	local SlotsBefore: { [number]: ItemStack? } = {}
 	for Index = 1, MaxSlots do
 		local Stack = TargetInventory[Index]
-		if Stack and Stack.ItemId == ItemId then
-			SlotsBefore[Index] = Stack.Quantity
+		if Stack then
+			SlotsBefore[Index] = { ItemId = Stack.ItemId, Quantity = Stack.Quantity, Metadata = Stack.Metadata }
 		end
 	end
 
 	local Removed = InventoryUtil.RemoveItem(TargetInventory, ItemId, Quantity, MaxSlots, TargetMetadata)
 
 	if Removed > 0 then
-		for Index, OldQuantity in SlotsBefore do
+		for Index = 1, MaxSlots do
+			local Before = SlotsBefore[Index]
 			local After = TargetInventory[Index]
-			local NewQuantity = if After then After.Quantity else 0
 
-			if NewQuantity ~= OldQuantity then
+			local Changed = false
+			if (Before ~= nil and After == nil) or (Before ~= nil and After ~= nil and Before.Quantity ~= After.Quantity) then
+				Changed = true
+			end
+
+			if Changed then
 				SyncSlot(Player, InventoryName, Index)
 			end
 		end
@@ -508,12 +535,12 @@ function InventoryService.RemoveItem(
 end
 
 --[=[
-	Checks whether a player has at least the given quantity of an item.
+	Checks whether a player has at least the specified quantity of an item.
 
 	@param Player Player -- The owning player
 	@param InventoryName string -- The inventory to check
 	@param ItemId string -- The item type
-	@param Quantity number -- The minimum required
+	@param Quantity number -- Required quantity
 	@param TargetMetadata Metadata? -- Optional metadata filter
 	@return boolean -- True if the player has enough
 ]=]
@@ -524,17 +551,11 @@ function InventoryService.HasItem(
 	Quantity: number,
 	TargetMetadata: Metadata?
 ): boolean
-	local TargetInventory = GetPlayerInventory(Player, InventoryName)
-	if not TargetInventory then
-		return false
-	end
-
-	local MaxSlots = GetMaxSlots(InventoryName)
-	return InventoryUtil.HasItem(TargetInventory, ItemId, Quantity, MaxSlots, TargetMetadata)
+	return InventoryService.GetItemCount(Player, InventoryName, ItemId, TargetMetadata) >= Quantity
 end
 
 --[=[
-	Returns the total count of a specific item across all slots.
+	Returns the total quantity of an item across all slots in an inventory.
 
 	@param Player Player -- The owning player
 	@param InventoryName string -- The inventory to count in
@@ -643,11 +664,14 @@ function InventoryService.TransferSlot(
 		return false
 	end
 
+	local OldSource = SourceInventory[SourceIndex]
+	local OldTarget = TargetInventory[TargetIndex]
+
 	local Success = InventoryUtil.TransferSlot(SourceInventory, SourceIndex, TargetInventory, TargetIndex)
 
 	if Success then
-		InventoryService.SlotChanged:Fire(Player, SourceInventoryName, SourceIndex, SourceInventory[SourceIndex], SourceStack)
-		InventoryService.SlotChanged:Fire(Player, TargetInventoryName, TargetIndex, TargetInventory[TargetIndex], TargetStack)
+		InventoryService.SlotChanged:Fire(Player, SourceInventoryName, SourceIndex, SourceInventory[SourceIndex], OldSource)
+		InventoryService.SlotChanged:Fire(Player, TargetInventoryName, TargetIndex, TargetInventory[TargetIndex], OldTarget)
 		InventoryService.InventoryChanged:Fire(Player, SourceInventoryName)
 
 		SyncSlot(Player, SourceInventoryName, SourceIndex)
@@ -662,7 +686,7 @@ function InventoryService.TransferSlot(
 end
 
 --[=[
-	Swaps two slots without merging.
+	Swaps two slots between inventories without merging.
 
 	@param Player Player -- The owning player
 	@param SourceInventoryName string -- Source inventory name
@@ -1012,7 +1036,7 @@ function InventoryService.DestroyRuntimeInventory(InventoryId: string): boolean
 end
 
 --[=[
-	Adds items to a runtime inventory.
+	Adds items to a runtime inventory. Returns the overflow quantity.
 
 	@param InventoryId string -- The runtime inventory identifier
 	@param ItemId string -- The item type to add
